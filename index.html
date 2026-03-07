@@ -2,15 +2,31 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>JFF - Jiro Financial Freedom</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="JFF Finance">
+    <meta name="theme-color" content="#2563eb">
+    
+    <!-- Web Manifest Inline -->
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJnameIjogIkppcm8gRmluYW5jaWFsIEZyZWVkb20iLAogICJzaG9ydF9uYW1lIjogIkpGRiIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMGYxNzJhIiwKICAidGhlbWVfY29sb3IiOiAiIzI1NjNlYiIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogImh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzI0ODkvMjQ4OTcxOC5wbmciLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIKICAgIH0KICBdCn0=">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; transition: all 0.3s ease; margin: 0; padding: 0; background-color: #0f172a; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #0f172a; 
+            overscroll-behavior-y: contain; /* Ngăn kéo để load lại trang trên mobile */
+        }
         
         .phone-view { 
             max-width: 400px; 
@@ -46,10 +62,7 @@
 
         .dark-overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.1); 
             z-index: 1;
         }
@@ -66,7 +79,10 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
-        .settings-overlay { backdrop-filter: blur(8px); }
+        /* Tối ưu cho chế độ App (Standalone) */
+        @media (display-mode: standalone) {
+            header { padding-top: 40px; } /* Tránh tai thỏ trên iPhone */
+        }
     </style>
 </head>
 <body>
@@ -94,7 +110,6 @@
             
             const [gmtOffset, setGmtOffset] = useState(() => Number(localStorage.getItem('jars_gmt')) || 7);
             const [currentTime, setCurrentTime] = useState('');
-            
             const [bgImage, setBgImage] = useState(() => localStorage.getItem('jff_bg') || null);
             const [bgMode, setBgMode] = useState(() => localStorage.getItem('jff_bg_mode') || 'bg-crop');
             const [tempImage, setTempImage] = useState(null);
@@ -157,22 +172,6 @@
                 return grouped;
             }, [fundData]);
 
-            const handleBgUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => setTempImage(event.target.result);
-                reader.readAsDataURL(file);
-            };
-
-            const confirmBg = (mode) => {
-                setBgImage(tempImage);
-                setBgMode(mode);
-                localStorage.setItem('jff_bg', tempImage);
-                localStorage.setItem('jff_bg_mode', mode);
-                setTempImage(null);
-            };
-
             const handleAmountChange = (date, fundId, rawValue) => {
                 const numericValue = rawValue.replace(/\./g, '');
                 if (numericValue === '' || /^\d+$/.test(numericValue)) {
@@ -187,53 +186,15 @@
             const calculateFromIncome = () => {
                 const income = parseInt(totalIncome.replace(/\./g, ''), 10);
                 if (isNaN(income) || income <= 0) return;
-
                 const newDataForToday = { ...fundData[todayStr] };
                 FUNDS.forEach(fund => {
                     const currentAmount = newDataForToday[fund.id]?.amount || 0;
                     const bonus = Math.floor(income * (fund.percent / 100));
                     newDataForToday[fund.id] = { amount: currentAmount + bonus };
                 });
-
                 setFundData(prev => ({ ...prev, [todayStr]: newDataForToday }));
                 setTotalIncome('');
             };
-
-            const exportData = () => {
-                const dataStr = JSON.stringify({ fundData, rules, gmtOffset, bgMode });
-                const blob = new Blob([dataStr], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `jff_backup_${todayStr}.json`;
-                link.click();
-            };
-
-            const importData = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const imported = JSON.parse(event.target.result);
-                        if (imported.fundData) setFundData(imported.fundData);
-                        if (imported.rules) setRules(imported.rules);
-                        if (imported.gmtOffset) setGmtOffset(imported.gmtOffset);
-                        alert("Nhập dữ liệu thành công!");
-                    } catch (err) {
-                        alert("File không hợp lệ!");
-                    }
-                };
-                reader.readAsText(file);
-            };
-
-            const addRule = () => setRules([...rules, ""]);
-            const updateRule = (index, val) => {
-                const newRules = [...rules];
-                newRules[index] = val;
-                setRules(newRules);
-            };
-            const deleteRule = (index) => setRules(rules.filter((_, i) => i !== index));
 
             const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
             const formatInput = (val) => val ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
@@ -241,7 +202,7 @@
             return (
                 <div className="min-h-screen text-slate-800 relative">
                     <div className="hidden md:flex fixed bottom-6 right-6 z-50 items-center bg-white p-2 rounded-2xl shadow-2xl border border-slate-200">
-                        <span className="text-[10px] font-bold mr-2 text-slate-400 uppercase">Giao diện</span>
+                        <span className="text-[10px] font-bold mr-2 text-slate-400 uppercase tracking-widest">Mobile View</span>
                         <div onClick={() => setViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop')} className="w-12 h-6 bg-slate-200 rounded-full relative cursor-pointer p-1">
                             <div className={`w-4 h-4 bg-blue-600 rounded-full transition-all ${viewMode === 'mobile' ? 'translate-x-6' : 'translate-x-0'}`}></div>
                         </div>
@@ -261,11 +222,11 @@
                                         <div className="bg-blue-600 p-1.5 rounded-lg text-white">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
                                         </div>
-                                        <h1 className="font-black text-slate-800 text-sm tracking-tighter uppercase">JFF</h1>
+                                        <h1 className="font-black text-slate-800 text-sm tracking-tighter uppercase">JFF APP</h1>
                                     </div>
                                     <div className="flex items-center space-x-3">
                                         <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-100 shadow-inner">
-                                            GMT{gmtOffset > 0 ? `+${gmtOffset}` : gmtOffset} | {currentTime}
+                                            {currentTime}
                                         </div>
                                         <button onClick={() => setShowSettings(true)} className="text-slate-500 hover:text-blue-600 transition-colors p-1.5 bg-slate-100 rounded-full">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -281,16 +242,16 @@
 
                                     {activeTab === 'daily' ? (
                                         <div className="space-y-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {FUNDS.map(fund => (
-                                                    <div key={fund.id} className="glass-card p-5 rounded-3xl border border-white/50 shadow-xl">
-                                                        <div className="flex justify-between items-center mb-3">
-                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fund.name} ({fund.percent}%)</span>
+                                                    <div key={fund.id} className="glass-card p-4 rounded-3xl border border-white/50 shadow-xl">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{fund.name} ({fund.percent}%)</span>
                                                             <span className="text-[10px] text-blue-500 font-bold italic">{formatInput(fundData[getFormattedDate(-1)]?.[fund.id]?.amount)}</span>
                                                         </div>
                                                         <input 
                                                             type="text" 
-                                                            className="w-full text-3xl font-black text-blue-700 bg-transparent outline-none"
+                                                            className="w-full text-2xl font-black text-blue-700 bg-transparent outline-none"
                                                             placeholder="0"
                                                             value={formatInput(fundData[todayStr]?.[fund.id]?.amount)}
                                                             onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
@@ -299,43 +260,37 @@
                                                 ))}
                                             </div>
 
-                                            {/* Phần nhập thu nhập tổng */}
-                                            <div className="glass-card p-6 rounded-3xl border-2 border-blue-500/20">
-                                                <label className="text-[10px] font-black text-blue-600 uppercase mb-3 block">Tổng thu nhập hôm nay</label>
+                                            <div className="glass-card p-5 rounded-3xl border-2 border-blue-500/20 shadow-2xl">
+                                                <label className="text-[10px] font-black text-blue-600 uppercase mb-2 block tracking-widest">Tổng thu nhập hôm nay</label>
                                                 <div className="flex space-x-2">
                                                     <input 
                                                         type="text" 
-                                                        className="flex-1 text-2xl font-black bg-white/50 rounded-2xl px-4 py-3 outline-none border border-white focus:border-blue-400"
+                                                        className="flex-1 text-xl font-black bg-white/50 rounded-2xl px-4 py-3 outline-none border border-white focus:border-blue-400"
                                                         placeholder="0"
                                                         value={formatInput(totalIncome)}
                                                         onChange={(e) => setTotalIncome(e.target.value.replace(/\./g, ''))}
                                                     />
-                                                    <button 
-                                                        onClick={calculateFromIncome}
-                                                        className="bg-blue-600 text-white px-6 rounded-2xl font-black text-xs shadow-lg shadow-blue-200 active:scale-95 transition-transform"
-                                                    >
-                                                        CALCULATION
-                                                    </button>
+                                                    <button onClick={calculateFromIncome} className="bg-blue-600 text-white px-5 rounded-2xl font-black text-[10px] shadow-lg shadow-blue-200 active:scale-95 transition-transform">CALCULATION</button>
                                                 </div>
                                             </div>
 
-                                            {/* Mục Rule */}
-                                            <div className="glass-card p-6 rounded-3xl border border-white/50">
+                                            <div className="glass-card p-5 rounded-3xl border border-white/50 shadow-lg">
                                                 <div className="flex justify-between items-center mb-4">
                                                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter">Mục Rule</h3>
-                                                    <button onClick={addRule} className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">CREATE NEW</button>
+                                                    <button onClick={() => setRules([...rules, ""])} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100 uppercase">Create New</button>
                                                 </div>
-                                                <div className="space-y-3">
+                                                <div className="space-y-2">
                                                     {rules.map((rule, idx) => (
-                                                        <div key={idx} className="flex items-center space-x-2 bg-white/40 p-3 rounded-xl group">
+                                                        <div key={idx} className="flex items-center space-x-2 bg-white/40 p-3 rounded-2xl group">
                                                             <span className="text-[10px] font-bold text-slate-400">{idx + 1}.</span>
                                                             <input 
-                                                                className="flex-1 bg-transparent border-none outline-none text-xs font-semibold text-slate-700"
+                                                                className="flex-1 bg-transparent border-none outline-none text-[11px] font-semibold text-slate-700"
                                                                 value={rule}
-                                                                onChange={(e) => updateRule(idx, e.target.value)}
-                                                                placeholder="..."
+                                                                onChange={(e) => {
+                                                                    const n = [...rules]; n[idx] = e.target.value; setRules(n);
+                                                                }}
                                                             />
-                                                            <button onClick={() => deleteRule(idx)} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => setRules(rules.filter((_, i) => i !== idx))} className="text-red-400 p-1 opacity-0 group-hover:opacity-100">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                                             </button>
                                                         </div>
@@ -345,57 +300,33 @@
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
+                                            {/* (Lịch sử giống bản cũ) */}
                                             <div className="flex space-x-2 bg-white/50 p-1 rounded-xl w-fit">
                                                 <button onClick={() => setHistorySubTab('day')} className={`px-3 py-1.5 text-xs font-bold rounded-lg ${historySubTab === 'day' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}>Theo Ngày</button>
                                                 <button onClick={() => setHistorySubTab('month')} className={`px-3 py-1.5 text-xs font-bold rounded-lg ${historySubTab === 'month' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}>Theo Tháng</button>
                                             </div>
                                             <div className="space-y-2">
-                                                {historySubTab === 'day' ? (
-                                                    Object.keys(fundData).sort().reverse().map(date => {
-                                                        const isExp = expandedDate === date;
-                                                        const total = Object.values(fundData[date]).reduce((s, a) => s + (a.amount || 0), 0);
-                                                        return (
-                                                            <div key={date} className="glass-card rounded-2xl overflow-hidden shadow-md">
-                                                                <button onClick={() => setExpandedDate(isExp ? null : date)} className="w-full p-4 flex justify-between items-center hover:bg-white/20 transition-colors">
-                                                                    <span className="font-bold text-slate-800 text-sm">{date}</span>
-                                                                    <span className="text-blue-600 font-black text-sm">{formatCurrency(total)}</span>
-                                                                </button>
-                                                                {isExp && (
-                                                                    <div className="px-4 pb-4 grid grid-cols-2 gap-2 border-t pt-4">
-                                                                        {FUNDS.map(f => (
-                                                                            <div key={f.id} className="text-[10px] bg-white/40 p-2 rounded-lg">
-                                                                                <p className="text-slate-400 font-bold uppercase">{f.id}</p>
-                                                                                <p className="font-black text-slate-700">{formatCurrency(fundData[date]?.[f.id]?.amount)}</p>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    Object.keys(monthlyData).sort().reverse().map(month => (
-                                                        <div key={month} className="glass-card rounded-2xl overflow-hidden border-l-4 border-blue-600 shadow-md">
-                                                            <button onClick={() => setExpandedDate(expandedDate === month ? null : month)} className="w-full p-5 flex justify-between items-center">
-                                                                <div className="text-left">
-                                                                    <p className="font-black text-blue-800 uppercase text-xs">Tháng {month.split('-')[1]}, {month.split('-')[0]}</p>
-                                                                    <p className="text-[10px] text-slate-500 font-bold">Tổng hũ</p>
-                                                                </div>
-                                                                <span className="text-blue-700 font-black text-lg">{formatCurrency(monthlyData[month].total)}</span>
+                                                {historySubTab === 'day' ? Object.keys(fundData).sort().reverse().map(date => {
+                                                    const total = Object.values(fundData[date]).reduce((s, a) => s + (a.amount || 0), 0);
+                                                    return (
+                                                        <div key={date} className="glass-card rounded-2xl overflow-hidden shadow-md">
+                                                            <button onClick={() => setExpandedDate(expandedDate === date ? null : date)} className="w-full p-4 flex justify-between items-center">
+                                                                <span className="font-bold text-slate-800 text-sm">{date}</span>
+                                                                <span className="text-blue-600 font-black text-sm">{formatCurrency(total)}</span>
                                                             </button>
-                                                            {expandedDate === month && (
-                                                                <div className="px-5 pb-5 grid grid-cols-2 gap-3 border-t bg-white/10 pt-4">
+                                                            {expandedDate === date && (
+                                                                <div className="px-4 pb-4 grid grid-cols-2 gap-2 border-t pt-4">
                                                                     {FUNDS.map(f => (
-                                                                        <div key={f.id} className="bg-white/60 p-2.5 rounded-xl">
-                                                                            <p className="text-[9px] text-slate-400 font-black uppercase mb-1">{f.name}</p>
-                                                                            <p className="font-bold text-slate-800 text-xs">{formatCurrency(monthlyData[month].funds[f.id])}</p>
+                                                                        <div key={f.id} className="text-[10px] bg-white/40 p-2 rounded-lg">
+                                                                            <p className="text-slate-400 font-bold uppercase">{f.id}</p>
+                                                                            <p className="font-black text-slate-700">{formatCurrency(fundData[date]?.[f.id]?.amount)}</p>
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                             )}
                                                         </div>
-                                                    ))
-                                                )}
+                                                    );
+                                                }) : null}
                                             </div>
                                         </div>
                                     )}
@@ -404,58 +335,60 @@
                         </div>
                     </div>
 
-                    {tempImage && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                            <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in duration-300">
-                                <h3 className="text-center font-black text-slate-800 text-lg mb-2 uppercase tracking-tight">Cài đặt hiển thị ảnh</h3>
-                                <div className="space-y-3 mt-6">
-                                    <button onClick={() => confirmBg('bg-crop')} className="w-full p-4 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-700 shadow-lg shadow-blue-200">CHẾ ĐỘ CẮT (CROP)</button>
-                                    <button onClick={() => confirmBg('bg-fit')} className="w-full p-4 bg-slate-100 text-slate-800 rounded-2xl font-black text-xs hover:bg-slate-200">CHẾ ĐỘ GIỮ TỶ LỆ (FIT)</button>
-                                    <button onClick={() => setTempImage(null)} className="w-full p-3 text-slate-400 font-bold text-xs">Hủy bỏ</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
+                    {/* Settings Modal với Xuất/Nhập dữ liệu */}
                     {showSettings && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 settings-overlay bg-black/30">
-                            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 settings-overlay bg-black/30 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-200">
                                 <div className="p-6 border-b flex justify-between items-center bg-slate-50">
-                                    <h2 className="font-black text-slate-800 uppercase tracking-tighter">Hệ thống JFF</h2>
-                                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded-full bg-white border border-slate-200">
+                                    <h2 className="font-black text-slate-800 uppercase tracking-tighter">Cài đặt App</h2>
+                                    <button onClick={() => setShowSettings(false)} className="text-slate-400 p-1 rounded-full bg-white border border-slate-200">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                     </button>
                                 </div>
                                 <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase block mb-3">Sao lưu & Đồng bộ</label>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase block mb-3 tracking-widest">Dữ liệu cá nhân</label>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button onClick={exportData} className="bg-slate-800 text-white p-3 rounded-xl font-bold text-[10px] hover:bg-slate-700">XUẤT DỮ LIỆU (.JSON)</button>
-                                            <button onClick={() => importInputRef.current.click()} className="bg-blue-600 text-white p-3 rounded-xl font-bold text-[10px] hover:bg-blue-500">NHẬP DỮ LIỆU</button>
+                                            <button onClick={() => {
+                                                const blob = new Blob([JSON.stringify({fundData, rules})], {type: "application/json"});
+                                                const url = URL.createObjectURL(blob);
+                                                const a = document.createElement("a"); a.href = url; a.download="jff_data.json"; a.click();
+                                            }} className="bg-slate-800 text-white p-3 rounded-xl font-bold text-[10px]">XUẤT FILE .JSON</button>
+                                            <button onClick={() => importInputRef.current.click()} className="bg-blue-600 text-white p-3 rounded-xl font-bold text-[10px]">NHẬP DỮ LIỆU</button>
                                         </div>
-                                        <input type="file" ref={importInputRef} onChange={importData} className="hidden" accept=".json" />
+                                        <input type="file" ref={importInputRef} onChange={(e) => {
+                                            const file = e.target.files[0];
+                                            const reader = new FileReader();
+                                            reader.onload = (ev) => {
+                                                const d = JSON.parse(ev.target.result);
+                                                if(d.fundData) setFundData(d.fundData);
+                                                if(d.rules) setRules(d.rules);
+                                                alert("Đã cập nhật dữ liệu!");
+                                            };
+                                            reader.readAsText(file);
+                                        }} className="hidden" accept=".json" />
                                     </div>
-
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase block mb-3">Hình nền giao diện</label>
-                                        <button onClick={() => bgInputRef.current.click()} className="w-full flex items-center justify-center space-x-2 bg-slate-100 p-4 rounded-2xl font-black text-xs hover:bg-slate-200">
-                                            <span>THAY ĐỔI HÌNH NỀN</span>
-                                        </button>
-                                        <input type="file" ref={bgInputRef} onChange={handleBgUpload} className="hidden" accept="image/*" />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase block mb-3 tracking-widest">Giao diện</label>
+                                        <button onClick={() => bgInputRef.current.click()} className="w-full bg-slate-100 p-4 rounded-2xl font-black text-xs">THAY HÌNH NỀN</button>
+                                        <input type="file" ref={bgInputRef} onChange={(e) => {
+                                            const reader = new FileReader();
+                                            reader.onload = (ev) => setTempImage(ev.target.result);
+                                            reader.readAsDataURL(e.target.files[0]);
+                                        }} className="hidden" />
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase block mb-2">Múi giờ (GMT)</label>
-                                        <select value={gmtOffset} onChange={(e) => setGmtOffset(Number(e.target.value))} className="w-full p-4 bg-slate-100 rounded-2xl font-black text-slate-700 outline-none">
-                                            {Array.from({length: 25}, (_, i) => i - 12).map(v => (
-                                                <option key={v} value={v}>GMT {v >= 0 ? `+${v}` : v}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    
-                                    <div className="pt-6 border-t border-slate-100 flex justify-center text-center">
-                                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Jiro Financial Freedom v4.0<br/>Cloud Sync not enabled</p>
-                                    </div>
+                    {tempImage && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80">
+                            <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                                <h3 className="text-center font-black text-slate-800 mb-6 uppercase tracking-tight">Kiểu hiển thị</h3>
+                                <div className="space-y-3">
+                                    <button onClick={() => {setBgImage(tempImage); setBgMode('bg-crop'); setTempImage(null);}} className="w-full p-4 bg-blue-600 text-white rounded-2xl font-black text-xs shadow-lg">LẤP ĐẦY (CROP)</button>
+                                    <button onClick={() => {setBgImage(tempImage); setBgMode('bg-fit'); setTempImage(null);}} className="w-full p-4 bg-slate-100 text-slate-800 rounded-2xl font-black text-xs">KHÔNG CẮT (FIT)</button>
                                 </div>
                             </div>
                         </div>
@@ -466,6 +399,13 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('data:text/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdmZXRjaCcsIGV2ID0+IGV2LnJlc3BvbmRXaXRoKGZldGNoKGV2LnJlcXVlc3QpKSk7').catch(() => {});
+            });
+        }
     </script>
 </body>
 </html>
