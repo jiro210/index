@@ -3,33 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trợ lý Quản lý Quỹ Tài Chính</title>
-    <!-- Tailwind CSS -->
+    <title>Financial Jars Pro - GMT & Backup</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; transition: all 0.3s ease; }
+        .phone-view { max-width: 430px; margin: 20px auto; border: 12px solid #1e293b; border-radius: 40px; height: 850px; overflow-y: auto; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+        .phone-view::-webkit-scrollbar { width: 0px; }
+        [data-lucide] { width: 1.25rem; height: 1.25rem; }
+        .settings-overlay { backdrop-filter: blur(4px); }
     </style>
 </head>
-<body class="bg-slate-50">
+<body class="bg-slate-100">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
-
-        // Mock Lucide Icons for standalone HTML
-        const Wallet = () => <i data-lucide="wallet"></i>;
-        const CalendarDays = () => <i data-lucide="calendar-days"></i>;
-        const ChevronDown = () => <i data-lucide="chevron-down"></i>;
-        const ChevronUp = () => <i data-lucide="chevron-up"></i>;
-        const Clock = () => <i data-lucide="clock"></i>;
-        const LayoutDashboard = () => <i data-lucide="layout-dashboard"></i>;
+        const { useState, useEffect, useRef } = React;
 
         const FUNDS = [
             { id: 'FFA', name: 'Quỹ tự do tài chính' },
@@ -40,230 +33,229 @@
             { id: 'GIVE', name: 'Quỹ cho đi' },
         ];
 
-        const getGMT7Date = (offsetDays = 0) => {
-            const d = new Date();
-            const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-            const gmt7 = new Date(utc + (3600000 * 7));
-            gmt7.setDate(gmt7.getDate() + offsetDays);
-            const yyyy = gmt7.getFullYear();
-            const mm = String(gmt7.getMonth() + 1).padStart(2, '0');
-            const dd = String(gmt7.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        };
-
-        const formatDateVN = (dateStr) => {
-            if (!dateStr) return '';
-            const [y, m, d] = dateStr.split('-');
-            return `${d}/${m}/${y}`;
-        };
-
-        const formatCurrency = (amount) => {
-            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
-        };
-
-        const formatInputNumber = (val) => {
-            if (!val && val !== 0) return '';
-            return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        };
-
         function App() {
+            // State
+            const [viewMode, setViewMode] = useState('desktop'); // 'desktop' or 'mobile'
+            const [showSettings, setShowSettings] = useState(false);
+            const [gmtOffset, setGmtOffset] = useState(() => Number(localStorage.getItem('jars_gmt')) || 7);
             const [activeTab, setActiveTab] = useState('daily');
-            const [todayStr, setTodayStr] = useState(getGMT7Date(0));
-            const [yesterdayStr, setYesterdayStr] = useState(getGMT7Date(-1));
-            const [currentTime, setCurrentTime] = useState('');
             const [expandedDate, setExpandedDate] = useState(null);
+            const [currentTime, setCurrentTime] = useState('');
+            const fileInputRef = useRef(null);
 
             const [fundData, setFundData] = useState(() => {
                 const saved = localStorage.getItem('jars_finance_data');
                 return saved ? JSON.parse(saved) : {};
             });
 
-            useEffect(() => {
-                localStorage.setItem('jars_finance_data', JSON.stringify(fundData));
-            }, [fundData]);
+            // Lấy ngày theo GMT đã chọn
+            const getFormattedDate = (offsetDays = 0) => {
+                const d = new Date();
+                const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+                const targetTime = new Date(utc + (3600000 * gmtOffset));
+                targetTime.setDate(targetTime.getDate() + offsetDays);
+                return targetTime.toISOString().split('T')[0];
+            };
+
+            const [todayStr, setTodayStr] = useState(getFormattedDate(0));
+            const [yesterdayStr, setYesterdayStr] = useState(getFormattedDate(-1));
 
             useEffect(() => {
-                lucide.createIcons();
+                localStorage.setItem('jars_finance_data', JSON.stringify(fundData));
+                localStorage.setItem('jars_gmt', gmtOffset);
+            }, [fundData, gmtOffset]);
+
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
                 const timer = setInterval(() => {
                     const d = new Date();
                     const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-                    const gmt7 = new Date(utc + (3600000 * 7));
-                    setCurrentTime(gmt7.toLocaleTimeString('vi-VN', { hour12: false }));
-                    
-                    const newToday = getGMT7Date(0);
-                    if (newToday !== todayStr) {
-                        setTodayStr(newToday);
-                        setYesterdayStr(getGMT7Date(-1));
-                    }
+                    const target = new Date(utc + (3600000 * gmtOffset));
+                    setCurrentTime(target.toLocaleTimeString('vi-VN', { hour12: false }));
+                    setTodayStr(getFormattedDate(0));
+                    setYesterdayStr(getFormattedDate(-1));
                 }, 1000);
                 return () => clearInterval(timer);
-            }, [todayStr, activeTab, expandedDate]);
+            }, [gmtOffset, activeTab]);
+
+            // Backup & Restore
+            const exportData = () => {
+                const dataStr = JSON.stringify(fundData, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `backup_finance_gmt${gmtOffset}_${todayStr}.json`;
+                link.click();
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const json = JSON.parse(event.target.result);
+                        setFundData(json);
+                        alert("Khôi phục dữ liệu thành công!");
+                    } catch (err) {
+                        alert("File không hợp lệ!");
+                    }
+                };
+                reader.readAsText(file);
+            };
 
             const handleAmountChange = (date, fundId, rawValue) => {
                 const numericValue = rawValue.replace(/\./g, '');
                 if (numericValue === '' || /^\d+$/.test(numericValue)) {
-                    handleInputChange(date, fundId, 'amount', numericValue === '' ? 0 : parseInt(numericValue, 10));
+                    const value = numericValue === '' ? 0 : parseInt(numericValue, 10);
+                    setFundData(prev => ({
+                        ...prev,
+                        [date]: { ...prev[date], [fundId]: { ...prev[date]?.[fundId], amount: value } }
+                    }));
                 }
             };
 
-            const handleInputChange = (date, fundId, field, value) => {
-                setFundData(prev => {
-                    const newData = { ...prev };
-                    if (!newData[date]) newData[date] = {};
-                    if (!newData[date][fundId]) newData[date][fundId] = { amount: 0, note: '' };
-                    newData[date][fundId] = { ...newData[date][fundId], [field]: value };
-                    return newData;
-                });
-            };
-
-            const getFundValue = (date, fundId, field) => {
-                if (fundData[date] && fundData[date][fundId]) {
-                    return fundData[date][fundId][field];
-                }
-                return field === 'amount' ? 0 : '';
-            };
-
-            const renderDailyTab = () => (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200 text-slate-700">
-                                    <th className="p-4 font-semibold">Tên quỹ</th>
-                                    <th className="p-4 font-semibold text-center">Viết tắt</th>
-                                    <th className="p-4 font-semibold text-slate-500 text-right">Hôm qua ({formatDateVN(yesterdayStr)})</th>
-                                    <th className="p-4 font-semibold bg-blue-50/50 text-blue-700 text-right">Hiện tại ({formatDateVN(todayStr)})</th>
-                                    <th className="p-4 font-semibold">Ghi chú</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {FUNDS.map((fund) => (
-                                    <tr key={fund.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-4 font-medium text-slate-800">{fund.name}</td>
-                                        <td className="p-4 text-center">
-                                            <span className="inline-block px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md font-bold">{fund.id}</span>
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            <div className="px-3 py-2 bg-slate-50 rounded border border-slate-100 text-slate-500 font-mono">
-                                                {formatCurrency(getFundValue(yesterdayStr, fund.id, 'amount'))}
-                                            </div>
-                                        </td>
-                                        <td className="p-4 bg-blue-50/30">
-                                            <input
-                                                type="text"
-                                                className="w-full px-3 py-2 border border-blue-200 rounded focus:ring-2 focus:ring-blue-500 outline-none text-right font-mono font-bold text-blue-800"
-                                                value={formatInputNumber(getFundValue(todayStr, fund.id, 'amount'))}
-                                                onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
-                                            />
-                                        </td>
-                                        <td className="p-4">
-                                            <input
-                                                type="text"
-                                                className="w-full px-3 py-2 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none italic text-sm"
-                                                placeholder="Nhập ghi chú..."
-                                                value={getFundValue(todayStr, fund.id, 'note')}
-                                                onChange={(e) => handleInputChange(todayStr, fund.id, 'note', e.target.value)}
-                                            />
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            );
-
-            const renderMonthlyTab = () => {
-                const currentMonthPrefix = todayStr.substring(0, 7);
-                const daysInMonth = new Date(todayStr.split('-')[0], todayStr.split('-')[1], 0).getDate();
-                const allDates = Array.from({ length: daysInMonth }, (_, i) => {
-                    const day = String(i + 1).padStart(2, '0');
-                    return `${currentMonthPrefix}-${day}`;
-                }).reverse();
-
-                return (
-                    <div className="space-y-4">
-                        {allDates.map(date => {
-                            const dayData = fundData[date] || {};
-                            const isExpanded = expandedDate === date;
-                            const totalAmount = Object.values(dayData).reduce((sum, f) => sum + (f.amount || 0), 0);
-                            return (
-                                <div key={date} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                    <button 
-                                        onClick={() => setExpandedDate(isExpanded ? null : date)}
-                                        className={`w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 ${isExpanded ? 'bg-slate-50' : ''}`}
-                                    >
-                                        <div className="flex items-center space-x-4">
-                                            <div className={`p-2 rounded-lg flex flex-col items-center min-w-[50px] ${totalAmount > 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                                <span className="text-[10px] font-bold uppercase">Ngày</span>
-                                                <span className="text-lg font-bold">{date.split('-')[2]}</span>
-                                            </div>
-                                            <div className="text-left">
-                                                <h3 className="font-semibold text-slate-800">{formatDateVN(date)}</h3>
-                                                <p className="text-sm font-bold text-emerald-600">{formatCurrency(totalAmount)}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-slate-400">
-                                            {isExpanded ? <i data-lucide="chevron-up"></i> : <i data-lucide="chevron-down"></i>}
-                                        </div>
-                                    </button>
-                                    {isExpanded && (
-                                        <div className="p-6 border-t border-slate-100 bg-slate-50/50 grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            {FUNDS.map(fund => (
-                                                <div key={fund.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-xs font-bold text-slate-500 uppercase">{fund.name}</span>
-                                                    </div>
-                                                    <div className="text-lg font-bold text-slate-800">{formatCurrency(dayData[fund.id]?.amount || 0)}</div>
-                                                    {dayData[fund.id]?.note && <div className="text-xs text-slate-500 mt-1 italic">"{dayData[fund.id]?.note}"</div>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                );
-            };
+            const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
+            const formatInput = (val) => val ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
 
             return (
-                <div className="min-h-screen bg-slate-50 pb-12">
-                    <header className="bg-white border-b p-4 sticky top-0 z-10 shadow-sm">
-                        <div className="max-w-6xl mx-auto flex justify-between items-center">
-                            <div className="flex items-center space-x-3">
-                                <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-200 text-white">
-                                    <i data-lucide="wallet"></i>
-                                </div>
-                                <div>
-                                    <h1 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-none">Financial Jars</h1>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Smart Management</p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <div className="text-sm font-bold text-blue-600 flex items-center">
-                                    <i data-lucide="clock" className="w-4 h-4 mr-2"></i> {currentTime} — {formatDateVN(todayStr)}
-                                </div>
-                            </div>
+                <div className="min-h-screen bg-slate-100 transition-all">
+                    {/* Thanh trượt chuyển chế độ */}
+                    <div className="fixed bottom-6 right-6 z-50 flex items-center bg-white p-2 rounded-2xl shadow-2xl border border-slate-200">
+                        <span className="text-[10px] font-bold mr-2 text-slate-400">VIEW</span>
+                        <div 
+                            onClick={() => setViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop')}
+                            className="w-12 h-6 bg-slate-200 rounded-full relative cursor-pointer p-1"
+                        >
+                            <div className={`w-4 h-4 bg-blue-600 rounded-full transition-all ${viewMode === 'mobile' ? 'translate-x-6' : 'translate-x-0'}`}></div>
                         </div>
-                    </header>
+                    </div>
 
-                    <div className="max-w-6xl mx-auto px-4 mt-8">
-                        <div className="flex space-x-2 mb-8 bg-slate-200/50 p-1 rounded-xl w-fit">
-                            <button 
-                                onClick={() => setActiveTab('daily')} 
-                                className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'daily' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}
-                            >
-                                Hàng ngày
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('monthly')} 
-                                className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'monthly' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}
-                            >
-                                Thống kê tháng
-                            </button>
+                    <div className={viewMode === 'mobile' ? 'phone-view' : 'w-full'}>
+                        <div className="bg-slate-50 min-h-full pb-20 relative">
+                            {/* Header */}
+                            <header className="bg-white border-b sticky top-0 z-20 p-4 flex justify-between items-center shadow-sm">
+                                <div className="flex items-center space-x-2">
+                                    <div className="bg-blue-600 p-1.5 rounded-lg text-white">
+                                        <i data-lucide="wallet" className="w-5 h-5"></i>
+                                    </div>
+                                    <h1 className="font-black text-slate-800 text-sm tracking-tighter uppercase">Jars Pro</h1>
+                                </div>
+                                <div className="flex items-center space-x-3">
+                                    <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+                                        GMT{gmtOffset > 0 ? `+${gmtOffset}` : gmtOffset} | {currentTime}
+                                    </div>
+                                    <button onClick={() => setShowSettings(true)} className="text-slate-400 hover:text-blue-600 transition-colors">
+                                        <i data-lucide="settings"></i>
+                                    </button>
+                                </div>
+                            </header>
+
+                            {/* Main Content */}
+                            <main className="p-4 max-w-4xl mx-auto">
+                                <div className="flex bg-slate-200/50 p-1 rounded-xl mb-6 w-fit">
+                                    <button onClick={() => setActiveTab('daily')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'daily' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>NHẬP LIỆU</button>
+                                    <button onClick={() => setActiveTab('monthly')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'monthly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>LỊCH SỬ</button>
+                                </div>
+
+                                {activeTab === 'daily' ? (
+                                    <div className="space-y-3">
+                                        {FUNDS.map(fund => (
+                                            <div key={fund.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{fund.name}</span>
+                                                    <span className="text-[10px] text-slate-400 italic">Hôm qua: {formatCurrency(fundData[yesterdayStr]?.[fund.id]?.amount)}</span>
+                                                </div>
+                                                <input 
+                                                    type="text" 
+                                                    className="w-full text-2xl font-black text-blue-700 bg-transparent outline-none"
+                                                    placeholder="0"
+                                                    value={formatInput(fundData[todayStr]?.[fund.id]?.amount)}
+                                                    onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {Object.keys(fundData).sort().reverse().map(date => {
+                                            const isExp = expandedDate === date;
+                                            const total = Object.values(fundData[date]).reduce((s, a) => s + (a.amount || 0), 0);
+                                            return (
+                                                <div key={date} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                                                    <button onClick={() => setExpandedDate(isExp ? null : date)} className="w-full p-4 flex justify-between items-center">
+                                                        <span className="font-bold text-slate-700 text-sm">{date}</span>
+                                                        <span className="text-emerald-600 font-black text-sm">{formatCurrency(total)}</span>
+                                                    </button>
+                                                    {isExp && (
+                                                        <div className="px-4 pb-4 grid grid-cols-2 gap-2 border-t pt-3 bg-slate-50">
+                                                            {FUNDS.map(f => (
+                                                                <div key={f.id} className="text-[10px]">
+                                                                    <p className="text-slate-400 font-bold uppercase">{f.id}</p>
+                                                                    <p className="font-black text-slate-700">{formatCurrency(fundData[date]?.[f.id]?.amount)}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </main>
+
+                            {/* Settings Modal */}
+                            {showSettings && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 settings-overlay bg-slate-900/40">
+                                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-200">
+                                        <div className="p-6 border-b flex justify-between items-center">
+                                            <h2 className="font-black text-slate-800 uppercase tracking-tighter">Cài đặt hệ thống</h2>
+                                            <button onClick={() => setShowSettings(false)} className="text-slate-300 hover:text-red-500">
+                                                <i data-lucide="x-circle"></i>
+                                            </button>
+                                        </div>
+                                        <div className="p-6 space-y-6">
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase block mb-2">Múi giờ hệ thống (GMT)</label>
+                                                <select 
+                                                    value={gmtOffset} 
+                                                    onChange={(e) => setGmtOffset(Number(e.target.value))}
+                                                    className="w-full p-3 bg-slate-100 rounded-xl font-bold text-slate-700 outline-none border-2 border-transparent focus:border-blue-500"
+                                                >
+                                                    {Array.from({length: 25}, (_, i) => i - 12).map(v => (
+                                                        <option key={v} value={v}>GMT {v >= 0 ? `+${v}` : v}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase block mb-2">Sao lưu dữ liệu</label>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <button onClick={exportData} className="flex items-center justify-center space-x-2 bg-blue-600 text-white p-3 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all">
+                                                        <i data-lucide="download" className="w-4 h-4"></i>
+                                                        <span>XUẤT FILE</span>
+                                                    </button>
+                                                    <button onClick={() => fileInputRef.current.click()} className="flex items-center justify-center space-x-2 bg-slate-800 text-white p-3 rounded-xl font-bold text-xs hover:bg-black transition-all">
+                                                        <i data-lucide="upload" className="w-4 h-4"></i>
+                                                        <span>NHẬP FILE</span>
+                                                    </button>
+                                                    <input type="file" ref={fileInputRef} onChange={importData} className="hidden" accept=".json" />
+                                                </div>
+                                                <p className="text-[9px] text-slate-400 mt-2 italic">* Bạn có thể lưu file .json lên Google Drive để đồng bộ thủ công giữa các máy.</p>
+                                            </div>
+
+                                            <div className="pt-4 border-t">
+                                                <button disabled className="w-full p-4 bg-slate-100 rounded-2xl flex items-center justify-center space-x-3 opacity-50 cursor-not-allowed">
+                                                    <img src="https://www.google.com/favicon.ico" className="w-4 h-4" />
+                                                    <span className="font-bold text-xs text-slate-500 uppercase">Đăng nhập Google (Sắp ra mắt)</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        {activeTab === 'daily' ? renderDailyTab() : renderMonthlyTab()}
                     </div>
                 </div>
             );
