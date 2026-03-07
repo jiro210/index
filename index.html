@@ -12,7 +12,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; transition: all 0.3s ease; margin: 0; padding: 0; background-color: #0f172a; }
         
-        /* Giao diện điện thoại */
         .phone-view { 
             max-width: 400px; 
             margin: 20px auto; 
@@ -32,7 +31,6 @@
         }
         .phone-scroll-area::-webkit-scrollbar { width: 0px; }
 
-        /* Background logic */
         .app-bg-container {
             position: absolute;
             top: 0;
@@ -43,23 +41,19 @@
             background-repeat: no-repeat;
         }
 
-        /* Chế độ Fit: Giữ đúng tỷ lệ ảnh */
         .bg-fit { background-size: contain; background-position: center; }
-        /* Chế độ Crop: Cắt ảnh lấp đầy khung */
         .bg-crop { background-size: cover; background-position: center; }
 
-        /* Lớp phủ tối nhẹ (giảm brightness 5-10%) */
         .dark-overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.1); /* Độ đen 10% */
+            background-color: rgba(0, 0, 0, 0.1); 
             z-index: 1;
         }
 
-        /* Nội dung ứng dụng */
         .content-layer {
             position: relative;
             z-index: 2;
@@ -82,12 +76,12 @@
         const { useState, useEffect, useRef, useMemo } = React;
 
         const FUNDS = [
-            { id: 'FFA', name: 'Quỹ tự do tài chính' },
-            { id: 'LTSS', name: 'Quỹ tiết kiệm' },
-            { id: 'EDU', name: 'Quỹ giáo dục' },
-            { id: 'NEC', name: 'Quỹ nhu cầu thiết yếu' },
-            { id: 'PLAY', name: 'Quỹ hưởng thụ' },
-            { id: 'GIVE', name: 'Quỹ cho đi' },
+            { id: 'FFA', name: 'Quỹ tự do tài chính', percent: 10 },
+            { id: 'LTSS', name: 'Quỹ tiết kiệm', percent: 10 },
+            { id: 'EDU', name: 'Quỹ giáo dục', percent: 10 },
+            { id: 'NEC', name: 'Quỹ nhu cầu thiết yếu', percent: 55 },
+            { id: 'PLAY', name: 'Quỹ hưởng thụ', percent: 10 },
+            { id: 'GIVE', name: 'Quỹ cho đi', percent: 5 },
         ];
 
         function App() {
@@ -96,21 +90,26 @@
             const [activeTab, setActiveTab] = useState('daily');
             const [historySubTab, setHistorySubTab] = useState('day');
             const [expandedDate, setExpandedDate] = useState(null);
+            const [totalIncome, setTotalIncome] = useState('');
             
             const [gmtOffset, setGmtOffset] = useState(() => Number(localStorage.getItem('jars_gmt')) || 7);
             const [currentTime, setCurrentTime] = useState('');
             
-            // Background & Fit State
             const [bgImage, setBgImage] = useState(() => localStorage.getItem('jff_bg') || null);
             const [bgMode, setBgMode] = useState(() => localStorage.getItem('jff_bg_mode') || 'bg-crop');
-            const [tempImage, setTempImage] = useState(null); // Lưu ảnh vừa chọn để hiện bảng hỏi
+            const [tempImage, setTempImage] = useState(null);
             
-            const fileInputRef = useRef(null);
             const bgInputRef = useRef(null);
+            const importInputRef = useRef(null);
 
             const [fundData, setFundData] = useState(() => {
                 const saved = localStorage.getItem('jars_finance_data');
                 return saved ? JSON.parse(saved) : {};
+            });
+
+            const [rules, setRules] = useState(() => {
+                const saved = localStorage.getItem('jff_rules');
+                return saved ? JSON.parse(saved) : ["Tiền nào quỹ đó", "Xài lố tháng sau bù từ quỹ đó"];
             });
 
             const getFormattedDate = (offsetDays = 0) => {
@@ -122,13 +121,13 @@
             };
 
             const [todayStr, setTodayStr] = useState(getFormattedDate(0));
-            const [yesterdayStr, setYesterdayStr] = useState(getFormattedDate(-1));
 
             useEffect(() => {
                 localStorage.setItem('jars_finance_data', JSON.stringify(fundData));
                 localStorage.setItem('jars_gmt', gmtOffset);
                 localStorage.setItem('jff_bg_mode', bgMode);
-            }, [fundData, gmtOffset, bgMode]);
+                localStorage.setItem('jff_rules', JSON.stringify(rules));
+            }, [fundData, gmtOffset, bgMode, rules]);
 
             useEffect(() => {
                 const timer = setInterval(() => {
@@ -137,7 +136,6 @@
                     const target = new Date(utc + (3600000 * gmtOffset));
                     setCurrentTime(target.toLocaleTimeString('vi-VN', { hour12: false }));
                     setTodayStr(getFormattedDate(0));
-                    setYesterdayStr(getFormattedDate(-1));
                 }, 1000);
                 return () => clearInterval(timer);
             }, [gmtOffset]);
@@ -159,7 +157,6 @@
                 return grouped;
             }, [fundData]);
 
-            // Xử lý Upload và chọn chế độ
             const handleBgUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -176,11 +173,6 @@
                 setTempImage(null);
             };
 
-            const removeBg = () => {
-                setBgImage(null);
-                localStorage.removeItem('jff_bg');
-            };
-
             const handleAmountChange = (date, fundId, rawValue) => {
                 const numericValue = rawValue.replace(/\./g, '');
                 if (numericValue === '' || /^\d+$/.test(numericValue)) {
@@ -192,34 +184,77 @@
                 }
             };
 
+            const calculateFromIncome = () => {
+                const income = parseInt(totalIncome.replace(/\./g, ''), 10);
+                if (isNaN(income) || income <= 0) return;
+
+                const newDataForToday = { ...fundData[todayStr] };
+                FUNDS.forEach(fund => {
+                    const currentAmount = newDataForToday[fund.id]?.amount || 0;
+                    const bonus = Math.floor(income * (fund.percent / 100));
+                    newDataForToday[fund.id] = { amount: currentAmount + bonus };
+                });
+
+                setFundData(prev => ({ ...prev, [todayStr]: newDataForToday }));
+                setTotalIncome('');
+            };
+
+            const exportData = () => {
+                const dataStr = JSON.stringify({ fundData, rules, gmtOffset, bgMode });
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `jff_backup_${todayStr}.json`;
+                link.click();
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const imported = JSON.parse(event.target.result);
+                        if (imported.fundData) setFundData(imported.fundData);
+                        if (imported.rules) setRules(imported.rules);
+                        if (imported.gmtOffset) setGmtOffset(imported.gmtOffset);
+                        alert("Nhập dữ liệu thành công!");
+                    } catch (err) {
+                        alert("File không hợp lệ!");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const addRule = () => setRules([...rules, ""]);
+            const updateRule = (index, val) => {
+                const newRules = [...rules];
+                newRules[index] = val;
+                setRules(newRules);
+            };
+            const deleteRule = (index) => setRules(rules.filter((_, i) => i !== index));
+
             const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
             const formatInput = (val) => val ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
 
             return (
                 <div className="min-h-screen text-slate-800 relative">
-                    
-                    {/* Toggle PC/Mobile */}
                     <div className="hidden md:flex fixed bottom-6 right-6 z-50 items-center bg-white p-2 rounded-2xl shadow-2xl border border-slate-200">
-                        <span className="text-[10px] font-bold mr-2 text-slate-400">GIAO DIỆN PC</span>
-                        <div 
-                            onClick={() => setViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop')}
-                            className="w-12 h-6 bg-slate-200 rounded-full relative cursor-pointer p-1"
-                        >
+                        <span className="text-[10px] font-bold mr-2 text-slate-400 uppercase">Giao diện</span>
+                        <div onClick={() => setViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop')} className="w-12 h-6 bg-slate-200 rounded-full relative cursor-pointer p-1">
                             <div className={`w-4 h-4 bg-blue-600 rounded-full transition-all ${viewMode === 'mobile' ? 'translate-x-6' : 'translate-x-0'}`}></div>
                         </div>
                     </div>
 
                     <div className={viewMode === 'mobile' ? 'phone-view' : 'w-full min-h-screen relative'}>
                         <div className={viewMode === 'mobile' ? 'phone-scroll-area' : 'w-full min-h-screen'}>
-                            
-                            {/* Background Layer */}
                             {bgImage && (
                                 <div className={`app-bg-container ${bgMode}`} style={{ backgroundImage: `url(${bgImage})` }}>
                                     <div className="dark-overlay"></div>
                                 </div>
                             )}
 
-                            {/* Content Layer */}
                             <div className="content-layer">
                                 <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-20 p-4 flex justify-between items-center shadow-sm">
                                     <div className="flex items-center space-x-2">
@@ -238,29 +273,75 @@
                                     </div>
                                 </header>
 
-                                <main className="p-4 max-w-4xl mx-auto pb-20">
+                                <main className="p-4 max-w-4xl mx-auto pb-32">
                                     <div className="flex bg-slate-900/10 backdrop-blur-md p-1 rounded-xl mb-6 w-fit shadow-inner">
                                         <button onClick={() => setActiveTab('daily')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'daily' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}>NHẬP LIỆU</button>
                                         <button onClick={() => setActiveTab('history')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}>LỊCH SỬ</button>
                                     </div>
 
                                     {activeTab === 'daily' ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {FUNDS.map(fund => (
-                                                <div key={fund.id} className="glass-card p-5 rounded-3xl border border-white/50 shadow-xl">
-                                                    <div className="flex justify-between items-center mb-3">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fund.name}</span>
-                                                        <span className="text-[10px] text-blue-500 font-bold italic">Hôm qua: {formatInput(fundData[yesterdayStr]?.[fund.id]?.amount)}</span>
+                                        <div className="space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {FUNDS.map(fund => (
+                                                    <div key={fund.id} className="glass-card p-5 rounded-3xl border border-white/50 shadow-xl">
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fund.name} ({fund.percent}%)</span>
+                                                            <span className="text-[10px] text-blue-500 font-bold italic">{formatInput(fundData[getFormattedDate(-1)]?.[fund.id]?.amount)}</span>
+                                                        </div>
+                                                        <input 
+                                                            type="text" 
+                                                            className="w-full text-3xl font-black text-blue-700 bg-transparent outline-none"
+                                                            placeholder="0"
+                                                            value={formatInput(fundData[todayStr]?.[fund.id]?.amount)}
+                                                            onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
+                                                        />
                                                     </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Phần nhập thu nhập tổng */}
+                                            <div className="glass-card p-6 rounded-3xl border-2 border-blue-500/20">
+                                                <label className="text-[10px] font-black text-blue-600 uppercase mb-3 block">Tổng thu nhập hôm nay</label>
+                                                <div className="flex space-x-2">
                                                     <input 
                                                         type="text" 
-                                                        className="w-full text-3xl font-black text-blue-700 bg-transparent outline-none"
+                                                        className="flex-1 text-2xl font-black bg-white/50 rounded-2xl px-4 py-3 outline-none border border-white focus:border-blue-400"
                                                         placeholder="0"
-                                                        value={formatInput(fundData[todayStr]?.[fund.id]?.amount)}
-                                                        onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
+                                                        value={formatInput(totalIncome)}
+                                                        onChange={(e) => setTotalIncome(e.target.value.replace(/\./g, ''))}
                                                     />
+                                                    <button 
+                                                        onClick={calculateFromIncome}
+                                                        className="bg-blue-600 text-white px-6 rounded-2xl font-black text-xs shadow-lg shadow-blue-200 active:scale-95 transition-transform"
+                                                    >
+                                                        CALCULATION
+                                                    </button>
                                                 </div>
-                                            ))}
+                                            </div>
+
+                                            {/* Mục Rule */}
+                                            <div className="glass-card p-6 rounded-3xl border border-white/50">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter">Mục Rule</h3>
+                                                    <button onClick={addRule} className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">CREATE NEW</button>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    {rules.map((rule, idx) => (
+                                                        <div key={idx} className="flex items-center space-x-2 bg-white/40 p-3 rounded-xl group">
+                                                            <span className="text-[10px] font-bold text-slate-400">{idx + 1}.</span>
+                                                            <input 
+                                                                className="flex-1 bg-transparent border-none outline-none text-xs font-semibold text-slate-700"
+                                                                value={rule}
+                                                                onChange={(e) => updateRule(idx, e.target.value)}
+                                                                placeholder="..."
+                                                            />
+                                                            <button onClick={() => deleteRule(idx)} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
@@ -268,7 +349,6 @@
                                                 <button onClick={() => setHistorySubTab('day')} className={`px-3 py-1.5 text-xs font-bold rounded-lg ${historySubTab === 'day' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}>Theo Ngày</button>
                                                 <button onClick={() => setHistorySubTab('month')} className={`px-3 py-1.5 text-xs font-bold rounded-lg ${historySubTab === 'month' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}>Theo Tháng</button>
                                             </div>
-
                                             <div className="space-y-2">
                                                 {historySubTab === 'day' ? (
                                                     Object.keys(fundData).sort().reverse().map(date => {
@@ -324,42 +404,19 @@
                         </div>
                     </div>
 
-                    {/* Modal Chọn Chế Độ Ảnh (Ngay sau khi chọn file) */}
                     {tempImage && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
                             <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in duration-300">
                                 <h3 className="text-center font-black text-slate-800 text-lg mb-2 uppercase tracking-tight">Cài đặt hiển thị ảnh</h3>
-                                <p className="text-center text-xs text-slate-500 font-bold mb-6">Chọn cách bạn muốn ảnh hiện trên màn hình</p>
-                                
-                                <div className="space-y-3">
-                                    <button 
-                                        onClick={() => confirmBg('bg-crop')}
-                                        className="w-full p-4 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-700 flex flex-col items-center gap-1 shadow-lg shadow-blue-200"
-                                    >
-                                        <span>CHẾ ĐỘ CẮT (CROP)</span>
-                                        <span className="font-normal opacity-80 text-[10px]">Ảnh sẽ lấp đầy màn hình (Chuẩn 16:9 / 18:9)</span>
-                                    </button>
-                                    
-                                    <button 
-                                        onClick={() => confirmBg('bg-fit')}
-                                        className="w-full p-4 bg-slate-100 text-slate-800 rounded-2xl font-black text-xs hover:bg-slate-200 flex flex-col items-center gap-1"
-                                    >
-                                        <span>CHẾ ĐỘ GIỮ TỶ LỆ (FIT)</span>
-                                        <span className="font-normal opacity-60 text-[10px]">Thấy toàn bộ ảnh nhưng có thể có khoảng trống</span>
-                                    </button>
-
-                                    <button 
-                                        onClick={() => setTempImage(null)}
-                                        className="w-full p-3 text-slate-400 font-bold text-xs"
-                                    >
-                                        Hủy bỏ
-                                    </button>
+                                <div className="space-y-3 mt-6">
+                                    <button onClick={() => confirmBg('bg-crop')} className="w-full p-4 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-700 shadow-lg shadow-blue-200">CHẾ ĐỘ CẮT (CROP)</button>
+                                    <button onClick={() => confirmBg('bg-fit')} className="w-full p-4 bg-slate-100 text-slate-800 rounded-2xl font-black text-xs hover:bg-slate-200">CHẾ ĐỘ GIỮ TỶ LỆ (FIT)</button>
+                                    <button onClick={() => setTempImage(null)} className="w-full p-3 text-slate-400 font-bold text-xs">Hủy bỏ</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Settings Modal */}
                     {showSettings && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 settings-overlay bg-black/30">
                             <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200">
@@ -369,36 +426,35 @@
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                     </button>
                                 </div>
-                                <div className="p-6 space-y-6">
+                                <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase block mb-3">Sao lưu & Đồng bộ</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={exportData} className="bg-slate-800 text-white p-3 rounded-xl font-bold text-[10px] hover:bg-slate-700">XUẤT DỮ LIỆU (.JSON)</button>
+                                            <button onClick={() => importInputRef.current.click()} className="bg-blue-600 text-white p-3 rounded-xl font-bold text-[10px] hover:bg-blue-500">NHẬP DỮ LIỆU</button>
+                                        </div>
+                                        <input type="file" ref={importInputRef} onChange={importData} className="hidden" accept=".json" />
+                                    </div>
+
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase block mb-3">Hình nền giao diện</label>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            <button onClick={() => bgInputRef.current.click()} className="flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-2xl font-black text-xs hover:opacity-90 shadow-lg">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                                <span>THAY ĐỔI HÌNH NỀN</span>
-                                            </button>
-                                            {bgImage && (
-                                                <button onClick={removeBg} className="text-[11px] text-red-500 font-bold p-2 hover:bg-red-50 rounded-lg">Gỡ ảnh nền</button>
-                                            )}
-                                        </div>
+                                        <button onClick={() => bgInputRef.current.click()} className="w-full flex items-center justify-center space-x-2 bg-slate-100 p-4 rounded-2xl font-black text-xs hover:bg-slate-200">
+                                            <span>THAY ĐỔI HÌNH NỀN</span>
+                                        </button>
                                         <input type="file" ref={bgInputRef} onChange={handleBgUpload} className="hidden" accept="image/*" />
                                     </div>
 
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase block mb-2">Múi giờ (GMT)</label>
-                                        <select 
-                                            value={gmtOffset} 
-                                            onChange={(e) => setGmtOffset(Number(e.target.value))}
-                                            className="w-full p-4 bg-slate-100 rounded-2xl font-black text-slate-700 outline-none border-2 border-transparent focus:border-blue-500 appearance-none"
-                                        >
+                                        <select value={gmtOffset} onChange={(e) => setGmtOffset(Number(e.target.value))} className="w-full p-4 bg-slate-100 rounded-2xl font-black text-slate-700 outline-none">
                                             {Array.from({length: 25}, (_, i) => i - 12).map(v => (
                                                 <option key={v} value={v}>GMT {v >= 0 ? `+${v}` : v}</option>
                                             ))}
                                         </select>
                                     </div>
                                     
-                                    <div className="pt-6 border-t border-slate-100 flex justify-center">
-                                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Jiro Financial Freedom v3.7</p>
+                                    <div className="pt-6 border-t border-slate-100 flex justify-center text-center">
+                                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Jiro Financial Freedom v4.0<br/>Cloud Sync not enabled</p>
                                     </div>
                                 </div>
                             </div>
