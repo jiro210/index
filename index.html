@@ -125,8 +125,7 @@
 
             // --- STATE CHO TAB THỐNG KÊ KHOẢNG THỜI GIAN ---
             const [startDate, setStartDate] = useState(() => {
-                // Mặc định là ngày mùng 1 của tháng hiện tại
-                return getFormattedDate(0).substring(0, 8) + '01';
+                return getFormattedDate(0).substring(0, 8) + '01'; // Mặc định ngày 1 đầu tháng
             });
             const [endDate, setEndDate] = useState(getFormattedDate(0));
             const [searchResult, setSearchResult] = useState(null);
@@ -150,10 +149,16 @@
                 return () => clearInterval(timer);
             }, [gmtOffset, todayStr]);
 
+            // --- HÀM XỬ LÝ NHẬP LIỆU (HỖ TRỢ SỐ ÂM) ---
             const handleAmountChange = (date, fundId, rawValue) => {
-                const numericValue = rawValue.replace(/\./g, '');
-                if (numericValue === '' || /^\d+$/.test(numericValue)) {
-                    const value = numericValue === '' ? 0 : parseInt(numericValue, 10);
+                // Loại bỏ dấu chấm
+                const cleanValue = rawValue.replace(/\./g, '');
+                
+                // Cho phép chuỗi rỗng, dấu trừ đơn độc, hoặc số nguyên (có/không có dấu trừ)
+                if (cleanValue === '' || cleanValue === '-' || /^-?\d+$/.test(cleanValue)) {
+                    // Nếu người dùng mới chỉ gõ dấu trừ, ta lưu chuỗi '-' để họ gõ tiếp số
+                    const value = (cleanValue === '' || cleanValue === '-') ? cleanValue : parseInt(cleanValue, 10);
+                    
                     setFundData(prev => ({
                         ...prev,
                         [date]: { ...prev[date], [fundId]: { ...prev[date]?.[fundId], amount: value } }
@@ -164,7 +169,7 @@
             const calculateFromIncome = () => {
                 const incomeStr = totalIncome.toString().replace(/\./g, '');
                 const income = parseInt(incomeStr, 10);
-                if (isNaN(income) || income <= 0) return;
+                if (isNaN(income) || income <= 0) return; // Không chia nếu thu nhập âm hoặc bằng 0
                 
                 const newDataForToday = {};
                 FUNDS.forEach(fund => {
@@ -176,21 +181,19 @@
                 setTotalIncome('');
             };
 
-            // --- HÀM XỬ LÝ TÌM KIẾM THỐNG KÊ ---
             const handleSearchDateRange = () => {
                 if (!startDate || !endDate) return;
                 
                 let totalPeriod = 0;
                 const aggregatedFunds = {};
                 
-                // Khởi tạo quỹ về 0
                 FUNDS.forEach(f => aggregatedFunds[f.id] = 0);
 
-                // Quét dữ liệu từ startDate đến endDate
                 Object.keys(fundData).forEach(date => {
                     if (date >= startDate && date <= endDate) {
                         FUNDS.forEach(f => {
-                            const amount = fundData[date][f.id]?.amount || 0;
+                            // Cần parse sang số nguyên vì data có thể chứa dấu "-" đơn độc
+                            const amount = parseInt(fundData[date][f.id]?.amount) || 0;
                             aggregatedFunds[f.id] += amount;
                             totalPeriod += amount;
                         });
@@ -200,8 +203,21 @@
                 setSearchResult({ total: totalPeriod, funds: aggregatedFunds });
             };
 
+            // Format tiền tệ chuẩn hiển thị cho Tab Lịch sử/Thống kê
             const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
-            const formatInput = (val) => val ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+            
+            // Format số lúc đang nhập (để giữ được dấu trừ khi mới gõ)
+            const formatInput = (val) => {
+                if (val === undefined || val === null || val === "") return "";
+                if (val === "-") return "-"; // Giữ lại dấu trừ đơn nếu đang gõ
+                
+                const strVal = val.toString();
+                const isNegative = strVal.startsWith('-');
+                const absVal = strVal.replace('-', '');
+                const formatted = absVal.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                
+                return isNegative ? "-" + formatted : formatted;
+            };
 
             return (
                 <div className="min-h-screen text-slate-800 relative">
@@ -248,32 +264,38 @@
                                         <div className="space-y-6 animate-in fade-in duration-300">
                                             {/* Fund Input Grid */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {FUNDS.map(fund => (
-                                                    <div key={fund.id} className="glass-card p-4 rounded-3xl border border-white shadow-xl">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{fund.name} ({fund.percent}%)</span>
-                                                            <span className="text-[10px] text-blue-500 font-bold italic">
-                                                                Hôm qua: {formatInput(fundData[yesterdayStr]?.[fund.id]?.amount || 0)}
-                                                            </span>
+                                                {FUNDS.map(fund => {
+                                                    const currentAmt = fundData[todayStr]?.[fund.id]?.amount;
+                                                    const isNegative = currentAmt?.toString().startsWith('-');
+                                                    
+                                                    return (
+                                                        <div key={fund.id} className="glass-card p-4 rounded-3xl border border-white shadow-xl">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{fund.name} ({fund.percent}%)</span>
+                                                                <span className="text-[10px] text-slate-400 font-bold italic">
+                                                                    Hôm qua: {formatInput(fundData[yesterdayStr]?.[fund.id]?.amount || 0)}
+                                                                </span>
+                                                            </div>
+                                                            <input 
+                                                                type="text" 
+                                                                // Thay đổi màu sắc tự động nếu số tiền là âm
+                                                                className={`w-full text-2xl font-black bg-transparent outline-none ${isNegative ? 'text-red-500' : 'text-blue-700'}`}
+                                                                placeholder="0"
+                                                                value={formatInput(currentAmt)}
+                                                                onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
+                                                            />
                                                         </div>
-                                                        <input 
-                                                            type="text" 
-                                                            className="w-full text-2xl font-black text-blue-700 bg-transparent outline-none"
-                                                            placeholder="0"
-                                                            value={formatInput(fundData[todayStr]?.[fund.id]?.amount)}
-                                                            onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
-                                                        />
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
 
                                             {/* Calculation Box */}
                                             <div className="glass-card p-5 rounded-3xl border-2 border-blue-500/20 shadow-2xl mx-auto w-full">
-                                                <label className="text-[10px] font-black text-blue-600 uppercase mb-3 block tracking-widest text-center">Tổng thu nhập hôm nay</label>
+                                                <label className="text-[10px] font-black text-blue-600 uppercase mb-3 block tracking-widest text-center">Tổng thu nhập hôm nay (Chia quỹ)</label>
                                                 <div className="flex flex-col space-y-4">
                                                     <input 
                                                         type="text" 
-                                                        className="w-full text-3xl font-black bg-white/50 rounded-2xl px-4 py-4 outline-none border border-white focus:border-blue-400 text-center"
+                                                        className="w-full text-3xl font-black bg-white/50 rounded-2xl px-4 py-4 outline-none border border-white focus:border-blue-400 text-center text-blue-700"
                                                         placeholder="0"
                                                         value={formatInput(totalIncome)}
                                                         onChange={(e) => setTotalIncome(e.target.value.replace(/\./g, ''))}
@@ -324,27 +346,35 @@
                                             {historySubTab === 'day' && (
                                                 <div className="space-y-3">
                                                     {Object.keys(fundData).sort().reverse().map(date => {
-                                                        const total = Object.values(fundData[date]).reduce((s, a) => s + (a.amount || 0), 0);
+                                                        const total = Object.values(fundData[date]).reduce((s, a) => s + (parseInt(a.amount) || 0), 0);
+                                                        
                                                         return (
                                                             <div key={date} className="glass-card rounded-3xl overflow-hidden shadow-md border border-white">
                                                                 <button onClick={() => setExpandedDate(expandedDate === date ? null : date)} className="w-full p-4 flex justify-between items-center hover:bg-white/40 transition-colors">
                                                                     <span className="font-black text-slate-800 text-sm tracking-tight">{date}</span>
                                                                     <div className="flex items-center space-x-3">
-                                                                        <span className="text-blue-600 font-black text-sm">{formatCurrency(total)}</span>
+                                                                        <span className={`font-black text-sm ${total < 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                                                                            {formatCurrency(total)}
+                                                                        </span>
                                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className={`text-slate-400 transition-transform ${expandedDate === date ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
                                                                     </div>
                                                                 </button>
                                                                 {expandedDate === date && (
                                                                     <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-white pt-4 bg-white/30">
-                                                                        {FUNDS.map(f => (
-                                                                            <div key={f.id} className="bg-white/80 p-3 rounded-2xl border border-white shadow-sm flex flex-col justify-center">
-                                                                                <div className="flex justify-between items-center mb-1">
-                                                                                    <p className="text-slate-600 font-bold text-[10px] uppercase tracking-tighter">{f.name}</p>
-                                                                                    <span className="bg-blue-50 text-blue-600 text-[8px] px-1.5 py-0.5 rounded font-black">{f.id}</span>
+                                                                        {FUNDS.map(f => {
+                                                                            const amt = parseInt(fundData[date]?.[f.id]?.amount) || 0;
+                                                                            return (
+                                                                                <div key={f.id} className="bg-white/80 p-3 rounded-2xl border border-white shadow-sm flex flex-col justify-center">
+                                                                                    <div className="flex justify-between items-center mb-1">
+                                                                                        <p className="text-slate-600 font-bold text-[10px] uppercase tracking-tighter">{f.name}</p>
+                                                                                        <span className="bg-blue-50 text-blue-600 text-[8px] px-1.5 py-0.5 rounded font-black">{f.id}</span>
+                                                                                    </div>
+                                                                                    <p className={`font-black text-base ${amt < 0 ? 'text-red-500' : 'text-slate-800'}`}>
+                                                                                        {formatCurrency(amt)}
+                                                                                    </p>
                                                                                 </div>
-                                                                                <p className="font-black text-slate-800 text-base">{formatCurrency(fundData[date]?.[f.id]?.amount)}</p>
-                                                                            </div>
-                                                                        ))}
+                                                                            )
+                                                                        })}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -389,13 +419,19 @@
                                                     {searchResult && (
                                                         <div className="glass-card p-5 rounded-3xl shadow-xl border border-white animate-in slide-in-from-bottom-4">
                                                             <div className="text-center mb-6 pb-4 border-b border-white">
-                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tổng huy động trong kỳ</p>
-                                                                <p className="text-3xl font-black text-blue-600">{formatCurrency(searchResult.total)}</p>
+                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Thực thu ròng trong kỳ</p>
+                                                                <p className={`text-3xl font-black ${searchResult.total < 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                                                                    {formatCurrency(searchResult.total)}
+                                                                </p>
                                                             </div>
                                                             <div className="space-y-3">
                                                                 {FUNDS.map(f => {
                                                                     const amount = searchResult.funds[f.id];
-                                                                    const percentage = searchResult.total > 0 ? ((amount / searchResult.total) * 100).toFixed(1) : 0;
+                                                                    // Tính phần trăm thực tế dựa trên tổng ròng
+                                                                    const percentageRaw = searchResult.total !== 0 ? ((amount / Math.abs(searchResult.total)) * 100).toFixed(1) : 0;
+                                                                    const displayPercentage = isNaN(percentageRaw) ? 0 : percentageRaw;
+                                                                    const barWidth = Math.max(0, Math.min(100, displayPercentage)); // Không để CSS width bị âm
+                                                                    
                                                                     return (
                                                                         <div key={f.id} className="bg-white/80 p-3.5 rounded-2xl border border-white shadow-sm">
                                                                             <div className="flex justify-between items-end mb-2">
@@ -404,13 +440,17 @@
                                                                                     <p className="text-[9px] text-slate-400 font-bold mt-1">Mục tiêu: {f.percent}%</p>
                                                                                 </div>
                                                                                 <div className="text-right">
-                                                                                    <p className="text-sm font-black text-slate-900 leading-none">{formatCurrency(amount)}</p>
-                                                                                    <p className={`text-[10px] font-black mt-1 ${percentage >= f.percent ? 'text-emerald-500' : 'text-orange-400'}`}>Thực tế: {percentage}%</p>
+                                                                                    <p className={`text-sm font-black leading-none ${amount < 0 ? 'text-red-500' : 'text-slate-900'}`}>
+                                                                                        {formatCurrency(amount)}
+                                                                                    </p>
+                                                                                    <p className={`text-[10px] font-black mt-1 ${amount < 0 ? 'text-red-500' : (displayPercentage >= f.percent ? 'text-emerald-500' : 'text-orange-400')}`}>
+                                                                                        Thực tế: {displayPercentage}%
+                                                                                    </p>
                                                                                 </div>
                                                                             </div>
                                                                             {/* Progress bar */}
                                                                             <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                                                                <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
+                                                                                <div className={`h-1.5 rounded-full transition-all duration-1000 ${amount < 0 ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${barWidth}%` }}></div>
                                                                             </div>
                                                                         </div>
                                                                     )
