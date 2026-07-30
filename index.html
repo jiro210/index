@@ -443,20 +443,20 @@
                     <div className="relative z-10 flex-1 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8">
                         
                         {/* Header Navbar */}
-                        <header className="glass-card rounded-3xl p-4 sm:p-6 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-2xl">
-                            <div className="flex items-center space-x-3">
+                        <header className="glass-card rounded-3xl p-4 sm:p-5 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xl">
+                            <div className="flex items-center space-x-3 sm:space-x-4">
                                 <div 
-                                    className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-lg transform hover:rotate-6 transition-transform"
+                                    className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-lg"
                                     style={{ backgroundColor: themeColor }}
                                 >
                                     JFF
                                 </div>
                                 <div>
-                                    <h1 className="font-extrabold text-lg sm:text-xl text-white tracking-tight flex items-center gap-2">
-                                        Jiro Financial Freedom
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-semibold border border-white/10">v2.5</span>
+                                    <h1 className="font-extrabold text-lg text-white tracking-tight flex items-center gap-2">
+                                        Jiro Financial
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-slate-300 font-semibold border border-white/5">v2.5</span>
                                     </h1>
-                                    <p className="text-xs text-slate-400">Giao diện đang dùng: <span className="font-bold text-slate-200">{activeProfile.name}</span></p>
+                                    <p className="text-xs text-slate-400 mt-0.5">Giao diện: <span className="font-bold text-slate-200">{activeProfile.name}</span></p>
                                 </div>
                             </div>
 
@@ -546,37 +546,37 @@
                                 </div>
 
                                 {/* Funds Allocation Cards Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
                                     {activeProfile.funds.map((fund) => {
                                         const amount = Math.round((Number(incomeInput) || 0) * (fund.percent / 100));
                                         return (
                                             <div 
                                                 key={fund.id}
-                                                className="glass-card glass-card-hover rounded-3xl p-5 shadow-xl flex flex-col justify-between relative overflow-hidden"
+                                                className="glass-card glass-card-hover rounded-3xl p-5 shadow-lg relative overflow-hidden flex flex-col justify-between space-y-4 border border-white/5"
                                             >
                                                 <div 
-                                                    className="absolute top-0 left-0 right-0 h-1.5" 
+                                                    className="absolute left-0 top-0 bottom-0 w-1.5" 
                                                     style={{ backgroundColor: fund.color || themeColor }}
                                                 ></div>
 
-                                                <div className="space-y-3">
-                                                    <div className="flex justify-between items-start">
-                                                        <h3 className="font-bold text-base text-white pr-2">{fund.name}</h3>
+                                                <div className="pl-2 space-y-1.5">
+                                                    <div className="flex justify-between items-center">
+                                                        <h3 className="font-bold text-base text-white truncate pr-2">{fund.name}</h3>
                                                         <span 
-                                                            className="px-2.5 py-1 rounded-xl text-xs font-black text-white shadow-sm shrink-0"
-                                                            style={{ backgroundColor: fund.color || themeColor }}
+                                                            className="text-xs font-black px-2.5 py-1 rounded-lg shrink-0"
+                                                            style={{ backgroundColor: `${fund.color || themeColor}20`, color: fund.color || themeColor }}
                                                         >
                                                             {fund.percent}%
                                                         </span>
                                                     </div>
                                                     {fund.desc && (
-                                                        <p className="text-xs text-slate-400 leading-relaxed">{fund.desc}</p>
+                                                        <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">{fund.desc}</p>
                                                     )}
                                                 </div>
 
-                                                <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-end">
-                                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Số tiền quỹ</span>
-                                                    <span className="text-lg font-black text-white" style={{ color: fund.color || '#fff' }}>
+                                                <div className="pl-2 flex justify-between items-end pt-3 border-t border-white/5 mt-2">
+                                                    <span className="text-[11px] font-medium text-slate-400">Số tiền phân bổ</span>
+                                                    <span className="text-xl font-black tracking-tight" style={{ color: fund.color || themeColor }}>
                                                         {formatVND(amount)}
                                                     </span>
                                                 </div>
@@ -951,19 +951,35 @@
                                 {/* Theme Presets */}
                                 <div className="space-y-3">
                                     <label className="text-xs font-bold text-slate-300 uppercase block">Màu Sắc Chủ Đạo (Theme Color)</label>
-                                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                                        {COLOR_PRESETS.map((preset) => (
-                                            <button
-                                                key={preset.hex}
-                                                onClick={() => setThemeColor(preset.hex)}
-                                                className={`p-2 rounded-2xl border text-[10px] font-bold flex flex-col items-center space-y-1 transition-all ${
-                                                    themeColor === preset.hex ? 'border-white ring-2 ring-white/50' : 'border-white/10 hover:border-white/30'
-                                                }`}
-                                            >
-                                                <span className="w-5 h-5 rounded-full shadow-sm" style={{ backgroundColor: preset.hex }}></span>
-                                                <span className="text-slate-300 truncate w-full text-center">{preset.name}</span>
-                                            </button>
-                                        ))}
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        {/* Color Wheel */}
+                                        <div className="flex items-center space-x-2 bg-slate-800/80 p-1.5 pr-3 rounded-2xl border border-white/10 shadow-inner">
+                                            <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-white/20 shrink-0">
+                                                <input
+                                                    type="color"
+                                                    value={themeColor}
+                                                    onChange={(e) => setThemeColor(e.target.value)}
+                                                    className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer"
+                                                    title="Chọn màu tùy ý"
+                                                />
+                                            </div>
+                                            <span className="text-[10px] font-bold text-slate-300">Tùy chọn</span>
+                                        </div>
+                                        
+                                        {/* Presets */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {COLOR_PRESETS.map((preset) => (
+                                                <button
+                                                    key={preset.hex}
+                                                    onClick={() => setThemeColor(preset.hex)}
+                                                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                                                        themeColor === preset.hex ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:scale-110 hover:border-white/50'
+                                                    }`}
+                                                    style={{ backgroundColor: preset.hex }}
+                                                    title={preset.name}
+                                                />
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
 
