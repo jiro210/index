@@ -47,23 +47,23 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Default initial 6 jars profile
+        // Default initial profile
         const DEFAULT_PROFILES = [
             {
                 id: 'default-6-jars',
                 name: 'Giao Diện 1 (6 Quỹ Mặc Định)',
                 funds: [
-                    { id: '1', name: 'Nhu cầu thiết yếu (NEC)', percent: 55, color: '#ef4444', desc: 'Ăn uống, thuê nhà, điện nước, chi phí sinh hoạt thiết yếu' },
-                    { id: '2', name: 'Tự do tài chính (FFA)', percent: 10, color: '#3b82f6', desc: 'Đầu tư sinh lời, tạo dòng tiền thụ động, tài sản tích lũy' },
-                    { id: '3', name: 'Tiết kiệm dài hạn (LTSS)', percent: 10, color: '#10b981', desc: 'Mua xe, mua nhà, mục tiêu lớn & quỹ dự phòng khẩn cấp' },
-                    { id: '4', name: 'Học tập & Phát triển (EDU)', percent: 10, color: '#f59e0b', desc: 'Sách vở, khóa học, hội thảo, nâng cao giá trị bản thân' },
-                    { id: '5', name: 'Hưởng thụ (PLAY)', percent: 10, color: '#ec4899', desc: 'Du lịch, mua sắm, giải trí, thưởng cho bản thân' },
-                    { id: '6', name: 'Cho đi (GIVE)', percent: 5, color: '#8b5cf6', desc: 'Từ thiện, giúp đỡ người thân, quà tặng người yêu thương' }
+                    { id: '1', name: 'Nhu cầu thiết yếu (NEC)', percent: 55, color: '#ef4444' },
+                    { id: '2', name: 'Tự do tài chính (FFA)', percent: 10, color: '#3b82f6' },
+                    { id: '3', name: 'Tiết kiệm dài hạn (LTSS)', percent: 10, color: '#10b981' },
+                    { id: '4', name: 'Học tập & Phát triển (EDU)', percent: 10, color: '#f59e0b' },
+                    { id: '5', name: 'Hưởng thụ (PLAY)', percent: 10, color: '#ec4899' },
+                    { id: '6', name: 'Cho đi (GIVE)', percent: 5, color: '#8b5cf6' }
                 ]
             }
         ];
 
-        // Theme Presets
+        // Preset theme colors
         const COLOR_PRESETS = [
             { name: 'Xanh Lam', hex: '#3b82f6' },
             { name: 'Xanh Lục', hex: '#10b981' },
@@ -75,13 +75,12 @@
             { name: 'Xanh Cổ Vịt', hex: '#06b6d4' }
         ];
 
-        // Money format helper
+        // Format VND helper
         const formatVND = (amount) => {
             if (isNaN(amount) || amount === null || amount === undefined) return '0 ₫';
             return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
         };
 
-        // Date String Helper
         const getTodayString = () => {
             const today = new Date();
             const year = today.getFullYear();
@@ -96,40 +95,39 @@
         };
 
         function App() {
-            // Persistent States with localStorage
             const [profiles, setProfiles] = useState(() => {
-                const saved = localStorage.getItem('jff_profiles_v2');
+                const saved = localStorage.getItem('jff_profiles_v3');
                 return saved ? JSON.parse(saved) : DEFAULT_PROFILES;
             });
 
             const [activeProfileId, setActiveProfileId] = useState(() => {
-                const saved = localStorage.getItem('jff_active_profile_id_v2');
+                const saved = localStorage.getItem('jff_active_profile_id_v3');
                 return saved || DEFAULT_PROFILES[0].id;
             });
 
             const [historyData, setHistoryData] = useState(() => {
-                const saved = localStorage.getItem('jff_history_v2');
+                const saved = localStorage.getItem('jff_history_v3');
                 return saved ? JSON.parse(saved) : [];
             });
 
             const [themeColor, setThemeColor] = useState(() => {
-                return localStorage.getItem('jff_theme_color_v2') || '#3b82f6';
+                return localStorage.getItem('jff_theme_color_v3') || '#3b82f6';
             });
 
             const [glassOpacity, setGlassOpacity] = useState(() => {
-                return Number(localStorage.getItem('jff_glass_opacity_v2')) || 25;
+                return Number(localStorage.getItem('jff_glass_opacity_v3')) || 25;
             });
 
             const [glassBlur, setGlassBlur] = useState(() => {
-                return Number(localStorage.getItem('jff_glass_blur_v2')) || 12;
+                return Number(localStorage.getItem('jff_glass_blur_v3')) || 12;
             });
 
             const [bgImage, setBgImage] = useState(() => {
-                return localStorage.getItem('jff_bg_image_v2') || '';
+                return localStorage.getItem('jff_bg_image_v3') || '';
             });
 
             // Navigation & Modal States
-            const [activeTab, setActiveTab] = useState('input'); // 'input', 'config', 'history', 'rules'
+            const [activeTab, setActiveTab] = useState('input');
             const [incomeInput, setIncomeInput] = useState('');
             const [showSettings, setShowSettings] = useState(false);
             const [showNewProfileModal, setShowNewProfileModal] = useState(false);
@@ -139,45 +137,44 @@
             const [newProfileName, setNewProfileName] = useState('');
             const [toast, setToast] = useState(null);
 
-            // History Date Filter States
+            // History Date Range Filters
             const [fromDate, setFromDate] = useState('');
             const [toDate, setToDate] = useState('');
 
-            // Image Cropper Tool States
+            // Image Cropper States
             const [tempImage, setTempImage] = useState(null);
-            const [cropAspectRatio, setCropAspectRatio] = useState(NaN); // Free form
+            const [cropAspectRatio, setCropAspectRatio] = useState(NaN);
             const imageRef = useRef(null);
             const cropperRef = useRef(null);
 
             useEffect(() => {
-                localStorage.setItem('jff_profiles_v2', JSON.stringify(profiles));
+                localStorage.setItem('jff_profiles_v3', JSON.stringify(profiles));
             }, [profiles]);
 
             useEffect(() => {
-                localStorage.setItem('jff_active_profile_id_v2', activeProfileId);
+                localStorage.setItem('jff_active_profile_id_v3', activeProfileId);
             }, [activeProfileId]);
 
             useEffect(() => {
-                localStorage.setItem('jff_history_v2', JSON.stringify(historyData));
+                localStorage.setItem('jff_history_v3', JSON.stringify(historyData));
             }, [historyData]);
 
             useEffect(() => {
-                localStorage.setItem('jff_theme_color_v2', themeColor);
+                localStorage.setItem('jff_theme_color_v3', themeColor);
             }, [themeColor]);
 
             useEffect(() => {
-                localStorage.setItem('jff_glass_opacity_v2', glassOpacity.toString());
+                localStorage.setItem('jff_glass_opacity_v3', glassOpacity.toString());
             }, [glassOpacity]);
 
             useEffect(() => {
-                localStorage.setItem('jff_glass_blur_v2', glassBlur.toString());
+                localStorage.setItem('jff_glass_blur_v3', glassBlur.toString());
             }, [glassBlur]);
 
             useEffect(() => {
-                localStorage.setItem('jff_bg_image_v2', bgImage);
+                localStorage.setItem('jff_bg_image_v3', bgImage);
             }, [bgImage]);
 
-            // Toast Auto Hide
             const showToast = (message) => {
                 setToast(message);
                 setTimeout(() => {
@@ -185,18 +182,16 @@
                 }, 3000);
             };
 
-            // Active Profile Computed Lookup
             const activeProfile = useMemo(() => {
                 return profiles.find(p => p.id === activeProfileId) || profiles[0] || DEFAULT_PROFILES[0];
             }, [profiles, activeProfileId]);
 
-            // Total percent of funds in active profile
             const totalPercent = useMemo(() => {
                 if (!activeProfile || !activeProfile.funds) return 0;
                 return activeProfile.funds.reduce((sum, f) => sum + (Number(f.percent) || 0), 0);
             }, [activeProfile]);
 
-            // Filtered history by date range
+            // Filtered history by selected date range
             const filteredHistory = useMemo(() => {
                 return historyData.filter(record => {
                     if (fromDate && record.date < fromDate) return false;
@@ -205,7 +200,7 @@
                 });
             }, [historyData, fromDate, toDate]);
 
-            // Aggregated totals for filtered history
+            // Aggregated sum for date range
             const historyTotals = useMemo(() => {
                 let grandTotal = 0;
                 const fundTotals = {};
@@ -244,7 +239,6 @@
                 };
             }, [tempImage, cropAspectRatio]);
 
-            // Action Handlers
             const handleAddIncome = (amount) => {
                 const current = Number(incomeInput) || 0;
                 setIncomeInput((current + amount).toString());
@@ -292,7 +286,7 @@
                     id: 'profile-' + Date.now(),
                     name: newProfileName.trim(),
                     funds: [
-                        { id: Date.now().toString(), name: 'Quỹ Chi Tiêu Chính', percent: 100, color: themeColor, desc: 'Tự do tùy chỉnh các quỹ' }
+                        { id: Date.now().toString(), name: 'Quỹ Chi Tiêu Chính', percent: 100, color: themeColor }
                     ]
                 };
                 setProfiles([...profiles, newProf]);
@@ -317,8 +311,7 @@
                     id: Date.now().toString(),
                     name: `Quỹ mới ${activeProfile.funds.length + 1}`,
                     percent: 0,
-                    color: COLOR_PRESETS[activeProfile.funds.length % COLOR_PRESETS.length].hex,
-                    desc: 'Mô tả mục tiêu cho quỹ này'
+                    color: COLOR_PRESETS[activeProfile.funds.length % COLOR_PRESETS.length].hex
                 };
                 const updatedFunds = [...activeProfile.funds, newFund];
                 setProfiles(profiles.map(p => p.id === activeProfile.id ? { ...p, funds: updatedFunds } : p));
@@ -403,7 +396,7 @@
                         backgroundAttachment: 'fixed',
                     }}
                 >
-                    {/* Dynamic Glassmorphism CSS Injector */}
+                    {/* Dynamic Glassmorphism styling */}
                     <style>{`
                         .glass-card {
                             background-color: rgba(15, 23, 42, ${glassOpacity / 100});
@@ -413,7 +406,6 @@
                         }
                     `}</style>
 
-                    {/* Dark overlay for background image readability */}
                     {bgImage && <div className="fixed inset-0 bg-slate-950/50 pointer-events-none z-0" />}
 
                     {/* App Header */}
@@ -444,54 +436,53 @@
                         </div>
                     </header>
 
-                    {/* Navigation Tabs Bar */}
+                    {/* Navigation Bar */}
                     <main className="relative z-10 max-w-5xl mx-auto px-4 mt-4 space-y-5">
                         <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-white/10 shadow-lg backdrop-blur-md overflow-x-auto">
                             <button
                                 onClick={() => setActiveTab('input')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center space-x-1.5 ${
+                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
                                     activeTab === 'input' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
                                 }`}
                                 style={activeTab === 'input' ? { backgroundColor: themeColor } : {}}
                             >
-                                <span>💵 Nhập Liệu</span>
+                                <span>Nhập Liệu</span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('config')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center space-x-1.5 ${
+                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
                                     activeTab === 'config' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
                                 }`}
                                 style={activeTab === 'config' ? { backgroundColor: themeColor } : {}}
                             >
-                                <span>⚙️ Cấu Hình Quỹ</span>
+                                <span>Cấu Hình Quỹ</span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('history')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center space-x-1.5 ${
+                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
                                     activeTab === 'history' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
                                 }`}
                                 style={activeTab === 'history' ? { backgroundColor: themeColor } : {}}
                             >
-                                <span>📜 Lịch Sử</span>
+                                <span>Lịch Sử</span>
                             </button>
                             <button
                                 onClick={() => setActiveTab('rules')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center space-x-1.5 ${
+                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
                                     activeTab === 'rules' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
                                 }`}
                                 style={activeTab === 'rules' ? { backgroundColor: themeColor } : {}}
                             >
-                                <span>💡 Quy Tắc</span>
+                                <span>Quy Tắc</span>
                             </button>
                         </div>
 
                         {/* TAB 1: INPUT & ALLOCATION CALCULATOR */}
                         {activeTab === 'input' && (
                             <div className="space-y-6">
-                                {/* Income Input Card */}
                                 <div className="glass-card rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <h2 className="font-extrabold text-base text-white flex items-center gap-2">
+                                        <h2 className="font-extrabold text-base text-white">
                                             Nhập Số Tiền Thu Nhập Mới
                                         </h2>
                                         <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/10 text-slate-300 border border-white/10">
@@ -504,7 +495,7 @@
                                             type="number"
                                             value={incomeInput}
                                             onChange={(e) => setIncomeInput(e.target.value)}
-                                            placeholder="VD: 10000000 (10 triệu)..."
+                                            placeholder="VD: 10000000..."
                                             className="w-full bg-slate-900/90 text-white font-extrabold text-lg sm:text-2xl px-4 py-3.5 rounded-2xl border border-white/15 focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-500"
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
@@ -512,7 +503,7 @@
                                         </div>
                                     </div>
 
-                                    {/* Quick Increment Buttons */}
+                                    {/* Quick Amount Preset Buttons */}
                                     <div className="flex flex-wrap gap-2 pt-1">
                                         {[100000, 500000, 1000000, 5000000, 10000000, 50000000].map(amt => (
                                             <button
@@ -538,23 +529,23 @@
                                         className="w-full py-3.5 rounded-2xl text-white font-extrabold text-sm uppercase tracking-wider shadow-xl transition-all duration-200 hover:brightness-110 active:scale-[0.99]"
                                         style={{ backgroundColor: themeColor }}
                                     >
-                                        💾 Lưu Phân Bổ Vào Lịch Sử
+                                        Lưu Phân Bổ Vào Lịch Sử
                                     </button>
                                 </div>
 
-                                {/* Fund Allocation Cards Grid */}
+                                {/* Fund Cards Grid - Uncluttered 2-Line Layout */}
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center px-1">
-                                        <h3 className="font-extrabold text-sm uppercase text-slate-300 tracking-wider">
-                                            Phân Bổ Thu Nhập Theo % Ô Quỹ
+                                        <h3 className="font-extrabold text-xs uppercase text-slate-300 tracking-wider">
+                                            Phân Bổ Thu Nhập
                                         </h3>
                                         <span className={`text-xs font-bold ${totalPercent === 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
                                             Tổng: {totalPercent}%
                                         </span>
                                     </div>
 
-                                    {/* Uncluttered 1 column mobile / 2 columns PC layout */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {/* 1 Column Mobile / 2 Columns PC */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                         {activeProfile.funds.map((fund) => {
                                             const income = Number(incomeInput) || 0;
                                             const allocatedAmount = Math.round((income * (fund.percent || 0)) / 100);
@@ -562,22 +553,21 @@
                                             return (
                                                 <div 
                                                     key={fund.id} 
-                                                    className="glass-card rounded-2xl p-4 transition-all hover:border-white/25 relative overflow-hidden flex flex-col justify-between"
-                                                    style={{ borderLeft: `5px solid ${fund.color || themeColor}` }}
+                                                    className="glass-card rounded-2xl p-3.5 transition-all hover:border-white/25 flex flex-col justify-center gap-1.5"
+                                                    style={{ borderLeft: `4px solid ${fund.color || themeColor}` }}
                                                 >
-                                                    <div className="space-y-1">
-                                                        <div className="flex justify-between items-start gap-2">
-                                                            <h4 className="font-extrabold text-base text-white truncate">{fund.name}</h4>
-                                                            <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-white/10 text-slate-200 shrink-0">
-                                                                {fund.percent}%
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-slate-400 line-clamp-2">{fund.desc}</p>
+                                                    {/* Line 1: Fund Name & Percent */}
+                                                    <div className="flex justify-between items-center gap-2">
+                                                        <h4 className="font-extrabold text-sm text-white truncate">{fund.name}</h4>
+                                                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/10 text-slate-200 shrink-0">
+                                                            {fund.percent}%
+                                                        </span>
                                                     </div>
 
-                                                    <div className="pt-3 mt-3 border-t border-white/10 flex justify-between items-baseline">
+                                                    {/* Line 2: Allocated Amount */}
+                                                    <div className="flex justify-between items-center">
                                                         <span className="text-xs text-slate-400 font-medium">Số tiền nhận:</span>
-                                                        <span className="text-lg font-black text-emerald-400">
+                                                        <span className="text-base font-black text-emerald-400">
                                                             {formatVND(allocatedAmount)}
                                                         </span>
                                                     </div>
@@ -596,7 +586,7 @@
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                                         <div>
                                             <h2 className="font-extrabold text-base text-white">Cấu Hình Ô Quỹ & Tỷ Lệ %</h2>
-                                            <p className="text-xs text-slate-400">Tùy chỉnh tên, mô tả và số % của từng ô quỹ cho giao diện hiện tại</p>
+                                            <p className="text-xs text-slate-400">Tùy chỉnh tên và số % của từng ô quỹ</p>
                                         </div>
                                         <div className={`px-3 py-1 rounded-xl font-bold text-xs border ${
                                             totalPercent === 100 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
@@ -607,13 +597,13 @@
 
                                     {totalPercent !== 100 && (
                                         <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl text-xs text-amber-300 font-medium">
-                                            ⚠️ Cảnh báo: Tổng phần trăm các quỹ hiện tại là <strong>{totalPercent}%</strong>. Hãy điều chỉnh để tổng đúng <strong>100%</strong> nhé!
+                                            Cảnh báo: Tổng phần trăm hiện tại là <strong>{totalPercent}%</strong>. Hãy điều chỉnh để tổng vừa đủ <strong>100%</strong> nhé!
                                         </div>
                                     )}
 
                                     <div className="space-y-3 pt-2">
                                         {activeProfile.funds.map((fund, index) => (
-                                            <div key={fund.id} className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-3">
+                                            <div key={fund.id} className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10">
                                                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
                                                     <div className="sm:col-span-6">
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tên ô quỹ #{index + 1}</label>
@@ -635,7 +625,7 @@
                                                             className="w-full bg-slate-950 text-white font-black text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
                                                         />
                                                     </div>
-                                                    <div className="sm:col-span-3 flex items-center space-x-2 pt-4 sm:pt-0">
+                                                    <div className="sm:col-span-3 flex items-center space-x-2 pt-2 sm:pt-4">
                                                         <input
                                                             type="color"
                                                             value={fund.color || themeColor}
@@ -645,21 +635,12 @@
                                                         />
                                                         <button
                                                             onClick={() => handleDeleteFundFromProfile(fund.id)}
-                                                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all"
+                                                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all text-xs font-bold"
                                                             title="Xóa ô quỹ này"
                                                         >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                                            Xóa
                                                         </button>
                                                     </div>
-                                                </div>
-                                                <div>
-                                                    <input
-                                                        type="text"
-                                                        value={fund.desc || ''}
-                                                        placeholder="Mô tả ngắn gọn về quỹ này..."
-                                                        onChange={(e) => handleUpdateFund(fund.id, 'desc', e.target.value)}
-                                                        className="w-full bg-slate-950/60 text-slate-300 text-xs px-3 py-1.5 rounded-xl border border-white/5 focus:outline-none"
-                                                    />
                                                 </div>
                                             </div>
                                         ))}
@@ -667,7 +648,7 @@
 
                                     <button
                                         onClick={handleAddFundToProfile}
-                                        className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-dashed border-white/20 text-slate-200 font-bold text-xs uppercase transition-all flex items-center justify-center space-x-2"
+                                        className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-dashed border-white/20 text-slate-200 font-bold text-xs uppercase transition-all flex items-center justify-center"
                                     >
                                         <span>+ Thêm Ô Quỹ Mới</span>
                                     </button>
@@ -678,14 +659,13 @@
                         {/* TAB 3: HISTORY & DATE RANGE SEARCH */}
                         {activeTab === 'history' && (
                             <div className="space-y-6">
-                                {/* Search & Filter controls */}
                                 <div className="glass-card rounded-3xl p-5 shadow-2xl space-y-4">
                                     <div>
                                         <h2 className="font-extrabold text-base text-white">Lịch Sử Phân Bổ Tài Chính</h2>
                                         <p className="text-xs text-slate-400">Tra cứu chi tiết và tổng hợp số tiền theo khoảng thời gian</p>
                                     </div>
 
-                                    {/* Date Range Selection Inputs */}
+                                    {/* Date Range Inputs */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-white/10 items-end">
                                         <div>
                                             <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Từ ngày</label>
@@ -711,14 +691,14 @@
                                                     onClick={() => { setFromDate(''); setToDate(''); }}
                                                     className="py-2.5 px-4 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl border border-red-500/20 transition-all w-full sm:w-auto"
                                                 >
-                                                    ✕ Xóa bộ lọc ngày
+                                                    Xóa bộ lọc ngày
                                                 </button>
                                             </div>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* Aggregated Summary Box for Selected Date Range */}
+                                {/* Aggregated Summary for Date Range */}
                                 {filteredHistory.length > 0 && (
                                     <div className="glass-card rounded-3xl p-5 shadow-xl space-y-4 border border-blue-500/20 bg-blue-950/20">
                                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-3 gap-2">
@@ -752,7 +732,6 @@
                                 {/* History Records List */}
                                 {historyData.length === 0 ? (
                                     <div className="glass-card rounded-3xl p-12 text-center text-slate-400 space-y-3">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-slate-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                                         <p className="font-bold text-sm">Chưa có lịch sử phân bổ nào được lưu</p>
                                         <p className="text-xs text-slate-500">Hãy nhập số tiền ở tab Nhập Liệu và bấm "Lưu Phân Bổ" nhé!</p>
                                     </div>
@@ -780,10 +759,10 @@
                                                         </span>
                                                         <button
                                                             onClick={() => handleDeleteHistory(record.id)}
-                                                            className="text-red-400 hover:text-red-300 p-1"
+                                                            className="text-red-400 hover:text-red-300 p-1 font-bold text-xs"
                                                             title="Xóa bản ghi"
                                                         >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                                            Xóa
                                                         </button>
                                                     </div>
                                                 </div>
@@ -803,7 +782,7 @@
                             </div>
                         )}
 
-                        {/* TAB 4: RULES & PRINCIPLES */}
+                        {/* TAB 4: RULES */}
                         {activeTab === 'rules' && (
                             <div className="glass-card rounded-3xl p-6 shadow-2xl space-y-5">
                                 <h2 className="font-extrabold text-lg text-white">Quy Tắc Quản Lý Tài Chính Tự Do JFF</h2>
@@ -817,7 +796,7 @@
                                         <p className="text-xs text-slate-300">Ngay khi nhận được bất kỳ nguồn thu nhập nào (lương, thưởng, kinh doanh), hãy chia ngay lập tức theo đúng tỷ lệ % các quỹ.</p>
                                     </div>
                                     <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-2">
-                                        <h3 className="font-bold text-sm text-emerald-400">2. Quỹ tự do tài chính (FFA) là "Con gà đẻ trứng vàng"</h3>
+                                        <h3 className="font-bold text-sm text-emerald-400">2. Quỹ tự do tài chính (FFA) là con gà đẻ trứng vàng</h3>
                                         <p className="text-xs text-slate-300">Tuyệt đối không dùng quỹ FFA cho các mục đích chi tiêu sinh hoạt. Quỹ này chỉ dùng để đầu tư sinh lời và tích lũy tài sản.</p>
                                     </div>
                                     <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-2">
@@ -829,17 +808,15 @@
                         )}
                     </main>
 
-                    {/* FLOATING ACTION BUTTONS AT BOTTOM RIGHT */}
+                    {/* FLOATING ACTION BUTTONS */}
                     <div className="fixed bottom-5 right-5 z-40 flex items-center space-x-3">
-                        {/* Switch Profile Button */}
                         <button
                             onClick={() => setShowSwitchProfileModal(true)}
-                            className="px-4 py-3 rounded-2xl bg-slate-900/90 text-white font-extrabold text-xs border border-white/20 shadow-2xl backdrop-blur-md hover:bg-slate-800 transition-all active:scale-95 flex items-center space-x-2"
+                            className="px-4 py-3 rounded-2xl bg-slate-900/90 text-white font-extrabold text-xs border border-white/20 shadow-2xl backdrop-blur-md hover:bg-slate-800 transition-all active:scale-95"
                         >
-                            <span>🔄 Switch</span>
+                            Chuyển
                         </button>
 
-                        {/* Add New Profile Floating '+' Button */}
                         <button
                             onClick={() => setShowNewProfileModal(true)}
                             className="w-12 h-12 rounded-2xl text-white font-black text-2xl shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 flex items-center justify-center border border-white/20"
@@ -850,25 +827,25 @@
                         </button>
                     </div>
 
-                    {/* TOAST NOTIFICATION BANNER */}
+                    {/* TOAST BANNER */}
                     {toast && (
                         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] bg-slate-900/95 text-white px-5 py-3 rounded-2xl border border-white/20 shadow-2xl backdrop-blur-md text-xs font-extrabold animate-bounce">
                             {toast}
                         </div>
                     )}
 
-                    {/* MODAL 1: SETTINGS & THEME CUSTOMIZATION */}
+                    {/* MODAL 1: SETTINGS */}
                     {showSettings && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
                             <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-md shadow-2xl border border-white/10 space-y-6 max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center pb-3 border-b border-white/10">
                                     <h3 className="font-extrabold text-white text-base">Cài Đặt Giao Diện & Dữ Liệu</h3>
-                                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white p-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white p-1 font-bold">
+                                        ✕
                                     </button>
                                 </div>
 
-                                {/* Theme Presets */}
+                                {/* Theme Presets & Custom Color Wheel */}
                                 <div className="space-y-3">
                                     <label className="text-xs font-bold text-slate-300 uppercase block">Màu Sắc Chủ Đạo (Theme Color)</label>
                                     <div className="flex flex-wrap items-center gap-2">
@@ -884,29 +861,28 @@
                                             />
                                         ))}
 
-                                        {/* Custom Color Wheel Button */}
                                         <button
                                             onClick={() => {
                                                 setTempCustomColor(themeColor);
                                                 setShowColorPickerModal(true);
                                             }}
-                                            className="px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/20 font-bold text-xs flex items-center space-x-1.5 transition-all shadow-md active:scale-95"
+                                            className="px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/20 font-bold text-xs transition-all shadow-md active:scale-95"
                                         >
-                                            <span>🎨 Custom</span>
+                                            Custom
                                         </button>
                                     </div>
                                 </div>
 
                                 {/* Glass Opacity Slider */}
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs font-bold">
-                                        <span className="text-slate-300">Độ Trong Suốt Card (Glass Opacity)</span>
-                                        <span className="text-white font-mono">{glassOpacity}%</span>
+                                <div className="space-y-2 pt-2 border-t border-white/10">
+                                    <div className="flex justify-between text-xs font-bold text-slate-300 uppercase">
+                                        <span>Độ Trong Suốt Ô Quỹ (Glass Opacity)</span>
+                                        <span>{glassOpacity}%</span>
                                     </div>
                                     <input
                                         type="range"
-                                        min="10"
-                                        max="90"
+                                        min="0"
+                                        max="100"
                                         value={glassOpacity}
                                         onChange={(e) => setGlassOpacity(Number(e.target.value))}
                                         className="w-full accent-blue-500 cursor-pointer"
@@ -914,10 +890,10 @@
                                 </div>
 
                                 {/* Glass Blur Slider */}
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs font-bold">
-                                        <span className="text-slate-300">Độ Mờ Hậu Cảnh (Glass Blur)</span>
-                                        <span className="text-white font-mono">{glassBlur}px</span>
+                                <div className="space-y-2 pt-2 border-t border-white/10">
+                                    <div className="flex justify-between text-xs font-bold text-slate-300 uppercase">
+                                        <span>Độ Mờ Ô Quỹ (Glass Blur)</span>
+                                        <span>{glassBlur}px</span>
                                     </div>
                                     <input
                                         type="range"
@@ -934,7 +910,7 @@
                                     <label className="text-xs font-bold text-slate-300 uppercase block">Ảnh Nền Tùy Chỉnh</label>
                                     <div className="flex items-center space-x-3">
                                         <label className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs cursor-pointer border border-white/10 text-center transition-all">
-                                            <span>🖼️ Chọn ảnh & Crop</span>
+                                            <span>Chọn ảnh & Crop</span>
                                             <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
                                         </label>
                                         {bgImage && (
@@ -956,10 +932,10 @@
                                             onClick={handleExportData}
                                             className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-white/10 transition-all"
                                         >
-                                            📥 Tải Tệp Sao Lưu
+                                            Tải tệp sao lưu
                                         </button>
                                         <label className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-white/10 text-center cursor-pointer transition-all">
-                                            <span>📤 Nhập Dữ Liệu</span>
+                                            <span>Nhập dữ liệu</span>
                                             <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
                                         </label>
                                     </div>
@@ -968,178 +944,36 @@
                         </div>
                     )}
 
-                    {/* MODAL 2: NEW PROFILE CREATION */}
-                    {showNewProfileModal && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-4">
-                                <h3 className="font-extrabold text-white text-base">Tạo Giao Diện Phân Bổ Mới</h3>
-                                <p className="text-xs text-slate-400">Nhập tên cho giao diện tài chính mới của bạn (VD: Giao diện kinh doanh, Giao diện tiêu dùng...)</p>
-                                
-                                <input
-                                    type="text"
-                                    value={newProfileName}
-                                    onChange={(e) => setNewProfileName(e.target.value)}
-                                    placeholder="Tên giao diện..."
-                                    className="w-full bg-slate-950 text-white font-bold text-sm px-4 py-3 rounded-2xl border border-white/15 focus:outline-none focus:border-blue-500"
-                                />
-
-                                <div className="flex space-x-3 pt-2">
-                                    <button
-                                        onClick={() => setShowNewProfileModal(false)}
-                                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold text-xs uppercase"
-                                    >
-                                        Hủy
-                                    </button>
-                                    <button
-                                        onClick={handleCreateProfile}
-                                        className="flex-1 py-3 text-white rounded-2xl font-black text-xs uppercase shadow-lg transition-all hover:brightness-110 active:scale-95"
-                                        style={{ backgroundColor: themeColor }}
-                                    >
-                                        Tạo Mới
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL 3: SWITCH PROFILE */}
-                    {showSwitchProfileModal && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-md shadow-2xl border border-white/10 space-y-4 max-h-[80vh] overflow-y-auto">
-                                <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                                    <h3 className="font-extrabold text-white text-base">Danh Sách Giao Diện Phân Bổ</h3>
-                                    <button onClick={() => setShowSwitchProfileModal(false)} className="text-slate-400 hover:text-white p-1">
-                                        ✕
-                                    </button>
-                                </div>
-
-                                <div className="space-y-2">
-                                    {profiles.map((prof) => (
-                                        <div
-                                            key={prof.id}
-                                            onClick={() => {
-                                                setActiveProfileId(prof.id);
-                                                setShowSwitchProfileModal(false);
-                                                showToast(`Đã chuyển sang: ${prof.name}`);
-                                            }}
-                                            className={`p-4 rounded-2xl border transition-all cursor-pointer flex justify-between items-center ${
-                                                activeProfileId === prof.id
-                                                    ? 'border-blue-500 bg-blue-500/10'
-                                                    : 'border-white/10 bg-slate-950/60 hover:border-white/30'
-                                            }`}
-                                        >
-                                            <div>
-                                                <h4 className="font-extrabold text-sm text-white">{prof.name}</h4>
-                                                <p className="text-[11px] text-slate-400">{prof.funds.length} ô quỹ phân bổ</p>
-                                            </div>
-                                            {activeProfileId === prof.id && (
-                                                <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-500 text-white">Đang dùng</span>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL 4: INTERACTIVE IMAGE CROPPER TOOL */}
-                    {tempImage && (
-                        <div className="fixed inset-0 z-[130] flex items-center justify-center p-3 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-                            <div className="bg-slate-900 rounded-3xl p-5 w-full max-w-2xl shadow-2xl border border-white/10 space-y-4 max-h-[95vh] flex flex-col">
-                                <div className="flex justify-between items-center pb-2 border-b border-white/10">
-                                    <h3 className="font-extrabold text-white text-sm sm:text-base">Chỉnh Sửa & Cắt Ảnh Nền</h3>
-                                    <button onClick={() => setTempImage(null)} className="text-slate-400 hover:text-white p-1">
-                                        ✕
-                                    </button>
-                                </div>
-
-                                <div className="flex-1 min-h-[250px] max-h-[50vh] bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
-                                    <img ref={imageRef} src={tempImage} alt="Crop preview" className="max-w-full max-h-full block" />
-                                </div>
-
-                                {/* Crop ratio selector */}
-                                <div className="flex flex-wrap gap-2 justify-center pt-2">
-                                    {[
-                                        { label: 'Tự Do', ratio: NaN },
-                                        { label: '9:16 (Điện thoại)', ratio: 9 / 16 },
-                                        { label: '1:1 (Vuông)', ratio: 1 },
-                                        { label: '16:9 (Ngang)', ratio: 16 / 9 },
-                                    ].map((item, idx) => (
-                                        <button
-                                            key={idx}
-                                            onClick={() => setCropAspectRatio(item.ratio)}
-                                            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-slate-200 transition-all"
-                                        >
-                                            {item.label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className="flex space-x-3 pt-2 border-t border-white/10">
-                                    <button
-                                        onClick={() => setTempImage(null)}
-                                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold text-xs uppercase"
-                                    >
-                                        Hủy
-                                    </button>
-                                    <button
-                                        onClick={handleApplyCrop}
-                                        className="flex-1 py-3 text-white rounded-2xl font-black text-xs uppercase shadow-lg transition-all hover:brightness-110 active:scale-95"
-                                        style={{ backgroundColor: themeColor }}
-                                    >
-                                        Áp Dụng (OK)
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL 5: CUSTOM COLOR WHEEL PICKER */}
+                    {/* MODAL 2: CUSTOM COLOR PICKER POPUP */}
                     {showColorPickerModal && (
-                        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
                             <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-5">
-                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                                    <h3 className="font-extrabold text-white text-base">Chọn Màu Tùy Chỉnh</h3>
-                                    <button onClick={() => setShowColorPickerModal(false)} className="text-slate-400 hover:text-white p-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                    </button>
+                                <h3 className="font-extrabold text-white text-base">Chọn Màu Sắc Custom</h3>
+                                <div className="flex flex-col items-center gap-4">
+                                    <input
+                                        type="color"
+                                        value={tempCustomColor}
+                                        onChange={(e) => setTempCustomColor(e.target.value)}
+                                        className="w-32 h-32 rounded-3xl bg-transparent border-2 border-white/20 cursor-pointer p-1"
+                                    />
+                                    <span className="text-xs font-mono font-bold bg-slate-950 px-3 py-1.5 rounded-xl border border-white/10 text-slate-300">
+                                        {tempCustomColor.toUpperCase()}
+                                    </span>
                                 </div>
-
-                                <div className="flex flex-col items-center space-y-4 py-2">
-                                    <div 
-                                        className="w-20 h-20 rounded-2xl border-4 border-white/20 shadow-xl flex items-center justify-center transition-all"
-                                        style={{ backgroundColor: tempCustomColor }}
-                                    >
-                                        <span className="text-xs font-black px-2 py-1 rounded bg-black/40 text-white font-mono">{tempCustomColor}</span>
-                                    </div>
-                                    
-                                    <div className="w-full space-y-2">
-                                        <label className="text-xs font-bold text-slate-300 block text-center">Bảng Chọn Màu (Color Wheel)</label>
-                                        <input
-                                            type="color"
-                                            value={tempCustomColor}
-                                            onChange={(e) => setTempCustomColor(e.target.value)}
-                                            className="w-full h-12 rounded-2xl bg-slate-950 border border-white/15 cursor-pointer p-1"
-                                        />
-                                    </div>
-                                </div>
-
                                 <div className="flex space-x-3 pt-2">
                                     <button
-                                        type="button"
                                         onClick={() => setShowColorPickerModal(false)}
-                                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold text-xs uppercase"
+                                        className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs transition-all"
                                     >
                                         Hủy
                                     </button>
                                     <button
-                                        type="button"
                                         onClick={() => {
                                             setThemeColor(tempCustomColor);
                                             setShowColorPickerModal(false);
-                                            showToast("Đã đổi màu chủ đạo thành công!");
+                                            showToast('Đã áp dụng màu custom mới!');
                                         }}
-                                        className="flex-1 py-3 text-white rounded-2xl font-black text-xs uppercase shadow-lg transition-all hover:brightness-110 active:scale-95 font-bold"
+                                        className="flex-1 py-2.5 rounded-xl text-white font-extrabold text-xs transition-all"
                                         style={{ backgroundColor: tempCustomColor }}
                                     >
                                         OK
@@ -1148,11 +982,104 @@
                             </div>
                         </div>
                     )}
+
+                    {/* MODAL 3: IMAGE CROOPER TOOL */}
+                    {tempImage && (
+                        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+                            <div className="bg-slate-900 rounded-3xl p-5 w-full max-w-xl shadow-2xl border border-white/10 space-y-4 max-h-[90vh] flex flex-col">
+                                <div className="flex justify-between items-center pb-2 border-b border-white/10">
+                                    <h3 className="font-extrabold text-white text-sm">Cắt Ảnh Nền</h3>
+                                    <button onClick={() => setTempImage(null)} className="text-slate-400 hover:text-white text-xs font-bold">
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 min-h-[250px] sm:min-h-[350px] bg-slate-950 rounded-2xl overflow-hidden relative flex items-center justify-center">
+                                    <img ref={imageRef} src={tempImage} alt="Crop target" className="max-w-full max-h-[50vh]" />
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="flex flex-wrap gap-2 justify-center">
+                                        <button onClick={() => setCropAspectRatio(NaN)} className={`px-3 py-1 rounded-lg text-xs font-bold border ${isNaN(cropAspectRatio) ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-white/10 text-slate-300'}`}>Tự Do</button>
+                                        <button onClick={() => setCropAspectRatio(9/16)} className={`px-3 py-1 rounded-lg text-xs font-bold border ${cropAspectRatio === 9/16 ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-white/10 text-slate-300'}`}>9:16 (Phone)</button>
+                                        <button onClick={() => setCropAspectRatio(1)} className={`px-3 py-1 rounded-lg text-xs font-bold border ${cropAspectRatio === 1 ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-white/10 text-slate-300'}`}>1:1 (Vuông)</button>
+                                        <button onClick={() => setCropAspectRatio(16/9)} className={`px-3 py-1 rounded-lg text-xs font-bold border ${cropAspectRatio === 16/9 ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-white/10 text-slate-300'}`}>16:9 (Ngang)</button>
+                                    </div>
+
+                                    <div className="flex space-x-3 pt-2">
+                                        <button onClick={() => setTempImage(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all">
+                                            Hủy
+                                        </button>
+                                        <button onClick={handleApplyCrop} className="flex-1 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-lg transition-all" style={{ backgroundColor: themeColor }}>
+                                            OK (Áp Dụng)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL 4: CREATE NEW PROFILE */}
+                    {showNewProfileModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-4">
+                                <h3 className="font-extrabold text-white text-base">Tạo Giao Diện Quỹ Mới</h3>
+                                <input
+                                    type="text"
+                                    value={newProfileName}
+                                    onChange={(e) => setNewProfileName(e.target.value)}
+                                    placeholder="VD: Giao Diện Đầu Tư 2026..."
+                                    className="w-full bg-slate-950 text-white font-bold text-xs px-3.5 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                />
+                                <div className="flex space-x-3">
+                                    <button onClick={() => setShowNewProfileModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">
+                                        Hủy
+                                    </button>
+                                    <button onClick={handleCreateProfile} className="flex-1 py-2.5 rounded-xl text-white font-extrabold text-xs" style={{ backgroundColor: themeColor }}>
+                                        Tạo Mới
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL 5: SWITCH PROFILE */}
+                    {showSwitchProfileModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-md shadow-2xl border border-white/10 space-y-4">
+                                <div className="flex justify-between items-center pb-2 border-b border-white/10">
+                                    <h3 className="font-extrabold text-white text-base">Chuyển Đổi Giao Diện</h3>
+                                    <button onClick={() => setShowSwitchProfileModal(false)} className="text-slate-400 hover:text-white text-xs font-bold">
+                                        ✕
+                                    </button>
+                                </div>
+                                <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                                    {profiles.map((p) => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => {
+                                                setActiveProfileId(p.id);
+                                                setShowSwitchProfileModal(false);
+                                                showToast(`Đã chuyển sang: ${p.name}`);
+                                            }}
+                                            className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex justify-between items-center ${
+                                                p.id === activeProfileId ? 'bg-blue-600/20 border-blue-500 text-white font-bold' : 'bg-slate-950/60 border-white/10 text-slate-300 hover:border-white/30'
+                                            }`}
+                                        >
+                                            <span className="text-xs font-bold truncate">{p.name}</span>
+                                            {p.id === activeProfileId && <span className="text-[10px] bg-blue-500 text-white px-2 py-0.5 rounded-md font-bold">Đang chọn</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
         root.render(<App />);
     </script>
 </body>
