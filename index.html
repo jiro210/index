@@ -1,744 +1,1130 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JFF - Jiro Financial Freedom</title>
     
-    <!-- PWA Meta -->
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0f172a">
-
-    <!-- Web Manifest -->
-    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIkppcm8gRmluYW5jaWFsIEZyZWVkb20iLAogICJzaG9ydF9uYW1lIjogIkpGRiIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMGYxNzJhIiwKICAidGhlbWVfY29sb3IiOiAiIzI1NjNlYiIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogImh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzI0ODkvMjQ4OTcxOC5wbmciLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIKICAgIH0KICBdCn0=">
-
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel standalone -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Cropper.js for image editing -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-        body { 
-            font-family: 'Inter', sans-serif; 
-            margin: 0; padding: 0; 
-            background-color: #0f172a; 
-            overscroll-behavior-y: contain;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        /* Mobile Simulator Container */
-        .phone-view { 
-            max-width: 420px; margin: 20px auto; 
-            border: 12px solid #1e293b; border-radius: 40px; 
-            height: 880px; position: relative; 
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            overflow: hidden; background-color: #000;
-        }
-        
-        .phone-scroll-area { height: 100%; overflow-y: auto; position: relative; }
-        .phone-scroll-area::-webkit-scrollbar { width: 0px; }
-
-        .app-bg-container {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 0; background-repeat: no-repeat;
-        }
-        .bg-fit { background-size: contain; background-position: center; }
-        .bg-crop { background-size: cover; background-position: center; }
-
-        .dark-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.15); z-index: 1;
+        :root {
+            --theme-color: #3b82f6;
+            --glass-opacity: 0.85;
+            --glass-blur: 16px;
         }
 
-        .content-layer { position: relative; z-index: 2; min-height: 100%; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            color: #f8fafc;
+        }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.92);
-            backdrop-filter: saturate(180%) blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.4);
+            background: rgba(15, 23, 42, var(--glass-opacity)) !important;
+            backdrop-filter: blur(var(--glass-blur)) !important;
+            -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* Safe area for standalone mode */
-        @media (display-mode: standalone) {
-            header { padding-top: calc(1rem + env(safe-area-inset-top)); }
-            main { padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
+        .glass-card-hover {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        .glass-card-hover:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Cropper Customization */
+        .cropper-bg { background-image: none !important; background-color: #020617 !important; }
+        .cropper-view-box { outline: 2px solid var(--theme-color) !important; }
+        .cropper-line, .cropper-point { background-color: var(--theme-color) !important; }
     </style>
 </head>
-<body>
+<body class="min-h-screen selection:bg-blue-500 selection:text-white">
+
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
+        // Default 6-Jar Profile Template
         const DEFAULT_PROFILES = [
             {
-                id: 'preset_1',
-                name: 'Giao diện 1 (6 Hũ Chuẩn)',
+                id: 'p1',
+                name: 'Giao diện 1 (6 Quỹ Mặc Định)',
+                isDefault: true,
                 funds: [
-                    { id: 'FFA', name: 'Quỹ tự do tài chính', percent: 10 },
-                    { id: 'LTSS', name: 'Quỹ tiết kiệm dài hạn', percent: 10 },
-                    { id: 'EDU', name: 'Quỹ phát triển bản thân', percent: 10 },
-                    { id: 'NEC', name: 'Quỹ nhu cầu thiết yếu', percent: 55 },
-                    { id: 'PLAY', name: 'Quỹ hưởng thụ', percent: 10 },
-                    { id: 'GIVE', name: 'Quỹ cho đi', percent: 5 },
+                    { id: 'f1', name: 'Nhu cầu thiết yếu (NEC)', percent: 55, color: '#3b82f6', desc: 'Ăn uống, thuê nhà, hóa đơn, sinh hoạt hàng ngày' },
+                    { id: 'f2', name: 'Tự do tài chính (FFA)', percent: 10, color: '#10b981', desc: 'Đầu tư, tích sản, tạo nguồn thu nhập thụ động' },
+                    { id: 'f3', name: 'Tiết kiệm dài hạn (LTSS)', percent: 10, color: '#6366f1', desc: 'Mua xe, mua nhà, quỹ khẩn cấp, mục tiêu lớn' },
+                    { id: 'f4', name: 'Học tập & Phát triển (EDU)', percent: 10, color: '#f59e0b', desc: 'Sách, khóa học, nâng cao kiến thức bản thân' },
+                    { id: 'f5', name: 'Hưởng thụ (PLAY)', percent: 10, color: '#ec4899', desc: 'Giải trí, du lịch, mua sắm bản thân' },
+                    { id: 'f6', name: 'Cho đi (GIV)', percent: 5, color: '#14b8a6', desc: 'Từ thiện, giúp đỡ người thân, quà tặng' }
                 ]
             }
         ];
 
+        // Theme Color Presets
+        const COLOR_PRESETS = [
+            { name: 'Xanh Lam', hex: '#3b82f6' },
+            { name: 'Xanh Ngọc', hex: '#10b981' },
+            { name: 'Tím Huyền Bí', hex: '#8b5cf6' },
+            { name: 'Hồng Ánh Kim', hex: '#ec4899' },
+            { name: 'Cam Hổ Phách', hex: '#f59e0b' },
+            { name: 'Đỏ Đô', hex: '#ef4444' }
+        ];
+
         function App() {
-            const [viewMode, setViewMode] = useState('desktop'); 
-            const [showSettings, setShowSettings] = useState(false);
-            const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'history' | 'custom'
-            const [historySubTab, setHistorySubTab] = useState('day');
-            const [expandedDate, setExpandedDate] = useState(null);
-            const [totalIncome, setTotalIncome] = useState('');
-            
-            // Custom Layout Profiles State
+            // App Core States
             const [profiles, setProfiles] = useState(() => {
                 const saved = localStorage.getItem('jff_profiles');
                 return saved ? JSON.parse(saved) : DEFAULT_PROFILES;
             });
+
             const [activeProfileId, setActiveProfileId] = useState(() => {
-                const saved = localStorage.getItem('jff_active_profile_id');
-                return saved || 'preset_1';
+                return localStorage.getItem('jff_active_profile') || 'p1';
             });
 
-            // Modals for Profiles
+            const [incomeInput, setIncomeInput] = useState('');
+            const [historyData, setHistoryData] = useState(() => {
+                const saved = localStorage.getItem('jff_history');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            // Styling States
+            const [themeColor, setThemeColor] = useState(() => localStorage.getItem('jff_theme_color') || '#3b82f6');
+            const [glassOpacity, setGlassOpacity] = useState(() => Number(localStorage.getItem('jff_opacity')) || 85);
+            const [glassBlur, setGlassBlur] = useState(() => Number(localStorage.getItem('jff_blur')) || 16);
+            const [bgImage, setBgImage] = useState(() => localStorage.getItem('jff_bg') || null);
+
+            // Modals & UI Controls
+            const [activeTab, setActiveTab] = useState('calc'); // calc | config | history | rules
+            const [showSettings, setShowSettings] = useState(false);
             const [showNewProfileModal, setShowNewProfileModal] = useState(false);
             const [showSwitchProfileModal, setShowSwitchProfileModal] = useState(false);
-            const [newProfileNameInput, setNewProfileNameInput] = useState('');
-            
-            const [gmtOffset, setGmtOffset] = useState(() => Number(localStorage.getItem('jars_gmt')) || 7);
-            const [currentTime, setCurrentTime] = useState('');
-            const [bgImage, setBgImage] = useState(() => localStorage.getItem('jff_bg') || null);
-            const [bgMode, setBgMode] = useState(() => localStorage.getItem('jff_bg_mode') || 'bg-crop');
+            const [newProfileName, setNewProfileName] = useState('');
+            const [toast, setToast] = useState(null);
+            const [filterDate, setFilterDate] = useState('');
+
+            // Image Cropper States
             const [tempImage, setTempImage] = useState(null);
-            
+            const [aspectRatio, setAspectRatio] = useState(9 / 16);
+            const cropImageRef = useRef(null);
+            const cropperInstanceRef = useRef(null);
             const bgInputRef = useRef(null);
-            const importInputRef = useRef(null);
 
-            // Fund Data Structure: { "YYYY-MM-DD": { "FUND_ID_OR_NAME": { amount: 0 } } }
-            const [fundData, setFundData] = useState(() => {
-                const saved = localStorage.getItem('jars_finance_data');
-                return saved ? JSON.parse(saved) : {};
-            });
+            // Show Toast Message Helper
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 3200);
+            };
 
-            const [rules, setRules] = useState(() => {
-                const saved = localStorage.getItem('jff_rules');
-                return saved ? JSON.parse(saved) : ["Tiền nào quỹ đó", "Xài lố tháng sau bù từ quỹ đó"];
-            });
+            // Save state updates to LocalStorage
+            useEffect(() => {
+                localStorage.setItem('jff_profiles', JSON.stringify(profiles));
+            }, [profiles]);
 
-            // Current Active Profile
+            useEffect(() => {
+                localStorage.setItem('jff_active_profile', activeProfileId);
+            }, [activeProfileId]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_history', JSON.stringify(historyData));
+            }, [historyData]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_theme_color', themeColor);
+                document.documentElement.style.setProperty('--theme-color', themeColor);
+            }, [themeColor]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_opacity', glassOpacity);
+                document.documentElement.style.setProperty('--glass-opacity', glassOpacity / 100);
+            }, [glassOpacity]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_blur', glassBlur);
+                document.documentElement.style.setProperty('--glass-blur', `${glassBlur}px`);
+            }, [glassBlur]);
+
+            // Initialize Cropper Instance on Temp Image Load
+            useEffect(() => {
+                let cropper = null;
+                if (tempImage && cropImageRef.current && window.Cropper) {
+                    cropper = new window.Cropper(cropImageRef.current, {
+                        aspectRatio: isNaN(aspectRatio) ? NaN : aspectRatio,
+                        viewMode: 1,
+                        autoCropArea: 0.9,
+                        responsive: true,
+                        background: true,
+                        zoomable: true,
+                        scalable: true,
+                        rotatable: true,
+                        movable: true,
+                    });
+                    cropperInstanceRef.current = cropper;
+                }
+                return () => {
+                    if (cropper) {
+                        cropper.destroy();
+                        cropperInstanceRef.current = null;
+                    }
+                };
+            }, [tempImage, aspectRatio]);
+
+            // Active Profile object lookup
             const activeProfile = useMemo(() => {
                 return profiles.find(p => p.id === activeProfileId) || profiles[0] || DEFAULT_PROFILES[0];
             }, [profiles, activeProfileId]);
 
-            // Calculate total % for active profile
-            const activeProfileTotalPercent = useMemo(() => {
-                return (activeProfile?.funds || []).reduce((sum, f) => sum + (Number(f.percent) || 0), 0);
+            // Total percent of active profile funds
+            const totalProfilePercent = useMemo(() => {
+                if (!activeProfile || !activeProfile.funds) return 0;
+                return activeProfile.funds.reduce((sum, f) => sum + (Number(f.percent) || 0), 0);
             }, [activeProfile]);
 
-            const getFormattedDate = (offsetDays = 0) => {
-                const d = new Date();
-                const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-                const targetTime = new Date(utc + (3600000 * gmtOffset));
-                targetTime.setDate(targetTime.getDate() + offsetDays);
-                return targetTime.toISOString().split('T')[0];
+            // Handle Cropper Image Selection
+            const handleImageSelect = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        setTempImage(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+                e.target.value = '';
             };
 
-            const [todayStr, setTodayStr] = useState(getFormattedDate(0));
-            const yesterdayStr = useMemo(() => getFormattedDate(-1), [todayStr, gmtOffset]);
-
-            useEffect(() => {
-                localStorage.setItem('jars_finance_data', JSON.stringify(fundData));
-                localStorage.setItem('jars_gmt', gmtOffset);
-                localStorage.setItem('jff_bg_mode', bgMode);
-                localStorage.setItem('jff_rules', JSON.stringify(rules));
-                localStorage.setItem('jff_profiles', JSON.stringify(profiles));
-                localStorage.setItem('jff_active_profile_id', activeProfileId);
-            }, [fundData, gmtOffset, bgMode, rules, profiles, activeProfileId]);
-
-            useEffect(() => {
-                const timer = setInterval(() => {
-                    const d = new Date();
-                    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-                    const target = new Date(utc + (3600000 * gmtOffset));
-                    setCurrentTime(target.toLocaleTimeString('vi-VN', { hour12: false }));
-                    const nowStr = getFormattedDate(0);
-                    if (nowStr !== todayStr) setTodayStr(nowStr);
-                }, 1000);
-                return () => clearInterval(timer);
-            }, [gmtOffset, todayStr]);
-
-            const handleAmountChange = (date, fundId, rawValue) => {
-                const numericValue = rawValue.replace(/\./g, '');
-                if (numericValue === '' || /^\d+$/.test(numericValue)) {
-                    const value = numericValue === '' ? 0 : parseInt(numericValue, 10);
-                    setFundData(prev => ({
-                        ...prev,
-                        [date]: { ...prev[date], [fundId]: { ...prev[date]?.[fundId], amount: value } }
-                    }));
+            const handleApplyCrop = () => {
+                if (cropperInstanceRef.current) {
+                    const canvas = cropperInstanceRef.current.getCroppedCanvas({
+                        maxWidth: 1920,
+                        maxHeight: 1920,
+                        fillColor: '#020617',
+                        imageSmoothingEnabled: true,
+                        imageSmoothingQuality: 'high',
+                    });
+                    if (canvas) {
+                        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                        setBgImage(croppedDataUrl);
+                        localStorage.setItem('jff_bg', croppedDataUrl);
+                        setTempImage(null);
+                        showToast("Đã áp dụng ảnh nền thành công!");
+                    }
                 }
             };
 
-            // Income calculation based on active profile's percentages
-            const calculateFromIncome = () => {
-                const incomeStr = totalIncome.toString().replace(/\./g, '');
-                const income = parseInt(incomeStr, 10);
-                if (isNaN(income) || income <= 0) return;
-
-                if (activeProfileTotalPercent > 100) {
-                    alert('Tổng phần trăm các quỹ hiện tại đang vượt quá 100%. Vui lòng chỉnh lại trong tab Custom!');
+            // Profile Creation
+            const handleCreateProfile = (e) => {
+                e.preventDefault();
+                if (!newProfileName.trim()) {
+                    showToast("Vui lòng nhập tên giao diện!", "error");
                     return;
                 }
-                
-                const newDataForToday = { ...fundData[todayStr] };
-                activeProfile.funds.forEach(fund => {
-                    const bonus = Math.floor(income * ((Number(fund.percent) || 0) / 100));
-                    newDataForToday[fund.id] = { amount: bonus };
-                });
-                
-                setFundData(prev => ({ 
-                    ...prev, 
-                    [todayStr]: newDataForToday 
-                }));
-                
-                setTotalIncome('');
-            };
-
-            // Customizing profile functions
-            const handleCreateNewProfile = () => {
-                if (!newProfileNameInput.trim()) return;
                 const newId = 'profile_' + Date.now();
                 const newProf = {
                     id: newId,
-                    name: newProfileNameInput.trim(),
+                    name: newProfileName.trim(),
+                    isDefault: false,
                     funds: [
-                        { id: 'f_' + Date.now(), name: 'Quỹ chính 1', percent: 100 }
+                        { id: 'f_' + Date.now(), name: 'Quỹ Chi Tiêu Chính', percent: 100, color: themeColor, desc: 'Tự do tùy chỉnh phần trăm và tên ô quỹ' }
                     ]
                 };
                 setProfiles(prev => [...prev, newProf]);
                 setActiveProfileId(newId);
-                setNewProfileNameInput('');
+                setNewProfileName('');
                 setShowNewProfileModal(false);
-                setActiveTab('custom'); // Switch to custom tab directly so user can configure
+                setActiveTab('config');
+                showToast(`Đã tạo thành công giao diện "${newProf.name}"!`);
             };
 
-            const handleUpdateProfileName = (name) => {
-                setProfiles(prev => prev.map(p => p.id === activeProfileId ? { ...p, name } : p));
-            };
-
+            // Fund Config Operations
             const handleUpdateFund = (fundId, field, value) => {
                 setProfiles(prev => prev.map(p => {
-                    if (p.id !== activeProfileId) return p;
-                    const updatedFunds = p.funds.map(f => {
-                        if (f.id !== fundId) return f;
-                        if (field === 'percent') {
-                            const valNum = Math.min(100, Math.max(0, parseInt(value, 10) || 0));
-                            return { ...f, percent: valNum };
-                        }
-                        return { ...f, [field]: value };
-                    });
-
-                    // Check total percentage limit
-                    const totalP = updatedFunds.reduce((sum, item) => sum + (Number(item.percent) || 0), 0);
-                    if (field === 'percent' && totalP > 100) {
-                        // Warn or clamp if needed, but we can allow typing and show indicator
-                    }
-
-                    return { ...p, funds: updatedFunds };
+                    if (p.id !== activeProfile.id) return p;
+                    return {
+                        ...p,
+                        funds: p.funds.map(f => f.id === fundId ? { ...f, [field]: value } : f)
+                    };
                 }));
             };
 
-            const handleAddFundToActiveProfile = () => {
-                if (activeProfileTotalPercent >= 100) {
-                    alert("Tổng phần trăm đã đạt 100%. Vui lòng giảm % của quỹ khác trước khi thêm!");
-                    return;
+            const handleAddFund = () => {
+                if (totalProfilePercent >= 100) {
+                    showToast("Tổng % của các quỹ đã đạt 100%. Hãy hạ % các quỹ khác trước khi thêm!", "error");
                 }
-                const remaining = Math.max(0, 100 - activeProfileTotalPercent);
-                const newFundObj = {
+                const newFund = {
                     id: 'f_' + Date.now(),
-                    name: `Quỹ mới ${activeProfile.funds.length + 1}`,
-                    percent: remaining
+                    name: `Quỹ Mới ${activeProfile.funds.length + 1}`,
+                    percent: 0,
+                    color: '#3b82f6',
+                    desc: 'Mô tả mục đích của quỹ tài chính này'
                 };
                 setProfiles(prev => prev.map(p => {
-                    if (p.id !== activeProfileId) return p;
-                    return { ...p, funds: [...p.funds, newFundObj] };
+                    if (p.id !== activeProfile.id) return p;
+                    return { ...p, funds: [...p.funds, newFund] };
                 }));
+                showToast("Đã thêm một ô quỹ mới!");
             };
 
             const handleDeleteFund = (fundId) => {
                 if (activeProfile.funds.length <= 1) {
-                    alert("Phải giữ lại ít nhất 1 ô quỹ!");
+                    showToast("Mỗi giao diện phải có ít nhất 1 ô quỹ!", "error");
                     return;
                 }
                 setProfiles(prev => prev.map(p => {
-                    if (p.id !== activeProfileId) return p;
+                    if (p.id !== activeProfile.id) return p;
                     return { ...p, funds: p.funds.filter(f => f.id !== fundId) };
                 }));
+                showToast("Đã xóa ô quỹ!");
             };
 
-            const handleDeleteProfile = (profileId) => {
-                if (profiles.length <= 1) {
-                    alert("Cần giữ lại ít nhất 1 giao diện!");
+            // Save Income Allocation to History
+            const handleSaveHistory = () => {
+                const numericIncome = Number(incomeInput);
+                if (!numericIncome || numericIncome <= 0) {
+                    showToast("Vui lòng nhập số tiền thu nhập hợp lệ!", "error");
                     return;
                 }
-                const filtered = profiles.filter(p => p.id !== profileId);
-                setProfiles(filtered);
-                if (activeProfileId === profileId) {
-                    setActiveProfileId(filtered[0].id);
+                if (totalProfilePercent > 100) {
+                    showToast("Tổng % quỹ vượt quá 100%. Vui lòng điều chỉnh lại ở tab Cấu Hình Quỹ!", "error");
+                    return;
                 }
+
+                const today = new Date();
+                const dateStr = today.toISOString().split('T')[0];
+                const timeStr = today.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+                const fundAllocations = activeProfile.funds.map(f => ({
+                    fundName: f.name,
+                    percent: f.percent,
+                    amount: Math.round(numericIncome * (f.percent / 100))
+                }));
+
+                const newRecord = {
+                    id: 'hist_' + Date.now(),
+                    date: dateStr,
+                    time: timeStr,
+                    totalIncome: numericIncome,
+                    profileName: activeProfile.name,
+                    allocations: fundAllocations
+                };
+
+                setHistoryData(prev => [newRecord, ...prev]);
+                showToast(`Đã lưu phân bổ ${formatVND(numericIncome)} vào Lịch sử!`);
             };
 
-            const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
-            const formatInput = (val) => val !== undefined && val !== null ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+            // Delete History Record
+            const handleDeleteHistory = (id) => {
+                setHistoryData(prev => prev.filter(h => h.id !== id));
+                showToast("Đã xóa bản ghi lịch sử!");
+            };
+
+            // Backup & Restore
+            const handleExportData = () => {
+                const data = {
+                    profiles,
+                    activeProfileId,
+                    historyData,
+                    themeColor,
+                    glassOpacity,
+                    glassBlur,
+                    exportDate: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `JFF_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast("Đã xuất file sao lưu dữ liệu thành công!");
+            };
+
+            const handleImportData = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (parsed.profiles) setProfiles(parsed.profiles);
+                        if (parsed.activeProfileId) setActiveProfileId(parsed.activeProfileId);
+                        if (parsed.historyData) setHistoryData(parsed.historyData);
+                        if (parsed.themeColor) setThemeColor(parsed.themeColor);
+                        if (parsed.glassOpacity) setGlassOpacity(parsed.glassOpacity);
+                        if (parsed.glassBlur) setGlassBlur(parsed.glassBlur);
+                        showToast("Đã khôi phục dữ liệu sao lưu thành công!");
+                    } catch (err) {
+                        showToast("File sao lưu không hợp lệ!", "error");
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            };
+
+            // Formatting Helper
+            const formatVND = (val) => {
+                const num = Number(val) || 0;
+                return num.toLocaleString('vi-VN') + ' ₫';
+            };
 
             return (
-                <div className="min-h-screen text-slate-800 relative">
-                    {/* View Switcher for Desktop Preview */}
-                    <div className="hidden md:flex fixed top-6 right-6 z-50 items-center bg-white/90 backdrop-blur p-2 rounded-2xl shadow-2xl border border-slate-200">
-                        <span className="text-[10px] font-bold mr-2 text-slate-400 uppercase tracking-widest">Giả lập Mobile</span>
-                        <div onClick={() => setViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop')} className="w-12 h-6 bg-slate-200 rounded-full relative cursor-pointer p-1">
-                            <div className={`w-4 h-4 bg-blue-600 rounded-full transition-all ${viewMode === 'mobile' ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                        </div>
-                    </div>
+                <div 
+                    className="min-h-screen bg-cover bg-center bg-fixed transition-all duration-500 relative flex flex-col"
+                    style={{
+                        backgroundImage: bgImage ? `url(${bgImage})` : 'none',
+                    }}
+                >
+                    {/* Dark Overlay for Wallpaper readability */}
+                    <div className="absolute inset-0 bg-slate-950/70 backdrop-brightness-75 pointer-events-none z-0"></div>
 
-                    <div className={viewMode === 'mobile' ? 'phone-view' : 'w-full min-h-screen relative'}>
-                        <div className={viewMode === 'mobile' ? 'phone-scroll-area' : 'w-full min-h-screen pb-28'}>
-                            {bgImage && (
-                                <div className={`app-bg-container ${bgMode}`} style={{ backgroundImage: `url(${bgImage})` }}>
-                                    <div className="dark-overlay"></div>
-                                </div>
-                            )}
-
-                            <div className="content-layer">
-                                {/* Header */}
-                                <header className="bg-white/95 backdrop-blur-md border-b sticky top-0 z-20 p-4 flex justify-between items-center shadow-sm">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-md">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
-                                        </div>
-                                        <div>
-                                            <h1 className="font-black text-slate-800 text-sm tracking-tighter uppercase leading-none">JFF APP</h1>
-                                            <p className="text-[9px] font-semibold text-blue-600 truncate max-w-[130px] mt-0.5">{activeProfile.name}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
-                                            {currentTime}
-                                        </div>
-                                        <button onClick={() => setShowSettings(true)} className="text-slate-500 hover:text-blue-600 p-1.5 bg-slate-100 rounded-full transition-colors">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                                        </button>
-                                    </div>
-                                </header>
-
-                                {/* Main Navigation Tabs */}
-                                <main className="p-4 max-w-4xl mx-auto pb-28">
-                                    <div className="flex bg-slate-900/10 backdrop-blur-md p-1 rounded-2xl mb-6 w-fit shadow-inner mx-auto">
-                                        <button onClick={() => setActiveTab('daily')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'daily' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-600'}`}>NHẬP LIỆU</button>
-                                        <button onClick={() => setActiveTab('custom')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'custom' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-600'}`}>CẤU HÌNH QUỸ</button>
-                                        <button onClick={() => setActiveTab('history')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-600'}`}>LỊCH SỬ</button>
-                                    </div>
-
-                                    {/* TAB 1: NHẬP LIỆU (Daily Entry) */}
-                                    {activeTab === 'daily' && (
-                                        <div className="space-y-6">
-                                            {/* Fund Input Grid for Active Profile */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {activeProfile.funds.map(fund => (
-                                                    <div key={fund.id} className="glass-card p-4 rounded-3xl border border-white shadow-xl relative overflow-hidden">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">{fund.name} ({fund.percent}%)</span>
-                                                            <span className="text-[10px] text-blue-500 font-bold italic">
-                                                                Hôm qua: {formatInput(fundData[yesterdayStr]?.[fund.id]?.amount || 0)}
-                                                            </span>
-                                                        </div>
-                                                        <input 
-                                                            type="text" 
-                                                            className="w-full text-2xl font-black text-blue-700 bg-transparent outline-none"
-                                                            placeholder="0"
-                                                            value={formatInput(fundData[todayStr]?.[fund.id]?.amount)}
-                                                            onChange={(e) => handleAmountChange(todayStr, fund.id, e.target.value)}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Calculation Box */}
-                                            <div className="glass-card p-5 rounded-3xl border-2 border-blue-500/20 shadow-2xl mx-auto w-full">
-                                                <label className="text-[10px] font-black text-blue-600 uppercase mb-3 block tracking-widest text-center">TÍNH TỔNG THU NHẬP HÔM NAY</label>
-                                                <div className="flex flex-col space-y-4">
-                                                    <input 
-                                                        type="text" 
-                                                        className="w-full text-3xl font-black bg-white/60 rounded-2xl px-4 py-4 outline-none border border-white focus:border-blue-400 text-center shadow-inner"
-                                                        placeholder="0"
-                                                        value={formatInput(totalIncome)}
-                                                        onChange={(e) => setTotalIncome(e.target.value.replace(/\./g, ''))}
-                                                    />
-                                                    <button 
-                                                        onClick={calculateFromIncome} 
-                                                        className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white py-4 rounded-2xl font-black text-xs shadow-xl shadow-blue-200 transition-all uppercase tracking-widest"
-                                                    >
-                                                        TỰ ĐỘNG CHIA QUỸ ({activeProfileTotalPercent}%)
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Rules Section */}
-                                            <div className="glass-card p-5 rounded-3xl border border-white shadow-lg">
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter">Quy tắc Tài chính</h3>
-                                                    <button onClick={() => setRules([...rules, ""])} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100 uppercase">+ Tạo Rule</button>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    {rules.map((rule, idx) => (
-                                                        <div key={idx} className="flex items-center space-x-2 bg-white/60 p-3 rounded-2xl group border border-white/50 shadow-sm">
-                                                            <span className="text-[10px] font-bold text-slate-400">{idx + 1}.</span>
-                                                            <input 
-                                                                className="flex-1 bg-transparent border-none outline-none text-[11px] font-semibold text-slate-700"
-                                                                value={rule}
-                                                                onChange={(e) => {
-                                                                    const n = [...rules]; n[idx] = e.target.value; setRules(n);
-                                                                }}
-                                                            />
-                                                            <button onClick={() => setRules(rules.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* TAB 2: CẤU HÌNH QUỸ / GIAO DIỆN (Custom tab) */}
-                                    {activeTab === 'custom' && (
-                                        <div className="space-y-6">
-                                            <div className="glass-card p-5 rounded-3xl border border-white shadow-xl">
-                                                <div className="flex flex-col space-y-3 mb-6">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tên Giao Diện Hiện Tại</label>
-                                                    <input 
-                                                        type="text" 
-                                                        value={activeProfile.name}
-                                                        onChange={(e) => handleUpdateProfileName(e.target.value)}
-                                                        className="text-lg font-black bg-white/80 border border-slate-200 rounded-2xl p-3 outline-none focus:border-blue-500 text-slate-800"
-                                                    />
-                                                </div>
-
-                                                {/* Percentage total summary indicator */}
-                                                <div className="bg-slate-100 p-4 rounded-2xl mb-6 border border-slate-200 flex items-center justify-between">
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Tổng phần trăm các quỹ</span>
-                                                        <span className={`text-xl font-black ${activeProfileTotalPercent === 100 ? 'text-green-600' : activeProfileTotalPercent > 100 ? 'text-red-600' : 'text-blue-600'}`}>
-                                                            {activeProfileTotalPercent}% / 100%
-                                                        </span>
-                                                    </div>
-                                                    {activeProfileTotalPercent > 100 ? (
-                                                        <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2.5 py-1 rounded-full border border-red-200">Vượt quá 100%!</span>
-                                                    ) : activeProfileTotalPercent === 100 ? (
-                                                        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2.5 py-1 rounded-full border border-green-200">Hoàn hảo</span>
-                                                    ) : (
-                                                        <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full border border-blue-200">Còn trống {100 - activeProfileTotalPercent}%</span>
-                                                    )}
-                                                </div>
-
-                                                {/* Fund List Editors */}
-                                                <div className="space-y-3">
-                                                    <div className="flex justify-between items-center px-1">
-                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Danh sách các ô Quỹ</span>
-                                                        <span className="text-[10px] font-bold text-slate-400">Tối đa 100%</span>
-                                                    </div>
-
-                                                    {activeProfile.funds.map((fund, idx) => (
-                                                        <div key={fund.id} className="flex items-center space-x-2 bg-white/80 p-3 rounded-2xl border border-slate-200 shadow-sm">
-                                                            <span className="text-xs font-black text-slate-400 w-5">{idx + 1}.</span>
-                                                            <input 
-                                                                type="text"
-                                                                placeholder="Tên quỹ..."
-                                                                value={fund.name}
-                                                                onChange={(e) => handleUpdateFund(fund.id, 'name', e.target.value)}
-                                                                className="flex-1 bg-transparent text-xs font-bold text-slate-800 outline-none border-b border-transparent focus:border-blue-400 py-1"
-                                                            />
-                                                            <div className="flex items-center space-x-1 bg-slate-100 px-2 py-1 rounded-xl border border-slate-200">
-                                                                <input 
-                                                                    type="number"
-                                                                    min="0"
-                                                                    max="100"
-                                                                    value={fund.percent}
-                                                                    onChange={(e) => handleUpdateFund(fund.id, 'percent', e.target.value)}
-                                                                    className="w-12 text-center text-xs font-black bg-transparent outline-none text-blue-600"
-                                                                />
-                                                                <span className="text-[10px] font-bold text-slate-500">%</span>
-                                                            </div>
-                                                            <button 
-                                                                onClick={() => handleDeleteFund(fund.id)}
-                                                                className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                                            </button>
-                                                        </div>
-                                                    ))}
-
-                                                    <button 
-                                                        onClick={handleAddFundToActiveProfile}
-                                                        className="w-full py-3 mt-4 bg-blue-50 border-2 border-dashed border-blue-200 rounded-2xl text-blue-600 text-xs font-black hover:bg-blue-100 transition-all flex items-center justify-center space-x-1 uppercase tracking-wider"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                                        <span>Thêm Ô Quỹ Mới</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* TAB 3: LỊCH SỬ (History Tab) */}
-                                    {activeTab === 'history' && (
-                                        <div className="space-y-4">
-                                            <div className="flex space-x-2 bg-white/50 p-1 rounded-xl w-fit mx-auto">
-                                                <button onClick={() => setHistorySubTab('day')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${historySubTab === 'day' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}>Theo Ngày</button>
-                                                <button onClick={() => setHistorySubTab('month')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${historySubTab === 'month' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}>Theo Tháng</button>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                {Object.keys(fundData).sort().reverse().length === 0 ? (
-                                                    <div className="text-center py-10 glass-card rounded-3xl text-slate-400 font-medium text-xs">Chưa có lịch sử nhập liệu.</div>
-                                                ) : (
-                                                    Object.keys(fundData).sort().reverse().map(date => {
-                                                        const dayEntry = fundData[date] || {};
-                                                        const total = Object.values(dayEntry).reduce((s, a) => s + (a?.amount || 0), 0);
-                                                        return (
-                                                            <div key={date} className="glass-card rounded-2xl overflow-hidden shadow-md">
-                                                                <button onClick={() => setExpandedDate(expandedDate === date ? null : date)} className="w-full p-4 flex justify-between items-center text-left">
-                                                                    <span className="font-bold text-slate-800 text-sm">{date}</span>
-                                                                    <span className="text-blue-600 font-black text-sm">{formatCurrency(total)}</span>
-                                                                </button>
-                                                                {expandedDate === date && (
-                                                                    <div className="px-4 pb-4 grid grid-cols-2 gap-2 border-t pt-4 bg-white/30">
-                                                                        {Object.entries(dayEntry).map(([fKey, item]) => (
-                                                                            <div key={fKey} className="text-[10px] bg-white/80 p-2.5 rounded-xl border border-white shadow-sm">
-                                                                                <p className="text-slate-500 font-bold uppercase truncate">{fKey}</p>
-                                                                                <p className="font-black text-slate-800 mt-0.5">{formatCurrency(item?.amount)}</p>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </main>
-
-                                {/* Floating Bottom Control Bar for Profile Switching & Creation */}
-                                <div className={`fixed bottom-6 right-6 z-40 flex items-center space-x-3 ${viewMode === 'mobile' ? 'absolute' : ''}`}>
-                                    {/* Switch Preset Button */}
-                                    <button 
-                                        onClick={() => setShowSwitchProfileModal(true)}
-                                        className="bg-slate-900/90 text-white backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-2 border border-slate-700/50 hover:bg-slate-800 active:scale-95 transition-all"
-                                        title="Chuyển đổi Giao Diện"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
-                                        <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Chuyển Giao Diện</span>
-                                    </button>
-
-                                    {/* Add New Profile Floating '+' Button */}
-                                    <button 
-                                        onClick={() => setShowNewProfileModal(true)}
-                                        className="bg-blue-600 text-white p-4 rounded-2xl shadow-xl shadow-blue-500/30 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center border border-blue-400"
-                                        title="Tạo Giao Diện Mới"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* MODAL: CREATE NEW PROFILE */}
-                    {showNewProfileModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl border border-slate-100">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">Tạo Giao Diện Mới</h3>
-                                    <button onClick={() => setShowNewProfileModal(false)} className="text-slate-400 p-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                    </button>
-                                </div>
-                                <div className="space-y-4">
-                                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                                        Mỗi giao diện sẽ chứa các ô quỹ và tỷ lệ % tùy chỉnh của riêng bạn.
-                                    </p>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tên Giao Diện</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Ví dụ: Giao diện 2 (Tiết kiệm)..."
-                                            value={newProfileNameInput}
-                                            onChange={(e) => setNewProfileNameInput(e.target.value)}
-                                            className="w-full text-sm font-bold bg-slate-100 p-3.5 rounded-2xl outline-none border border-slate-200 focus:border-blue-500"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <button 
-                                        onClick={handleCreateNewProfile}
-                                        className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-200 uppercase tracking-widest hover:bg-blue-700 transition-all"
-                                    >
-                                        TẠO VÀ CẤU HÌNH NGAY
-                                    </button>
-                                </div>
+                    {/* Toast Notification */}
+                    {toast && (
+                        <div className="fixed top-5 right-5 z-[120] animate-in slide-in-from-top duration-300">
+                            <div className={`px-4 py-3 rounded-2xl shadow-2xl border flex items-center space-x-3 backdrop-blur-xl ${
+                                toast.type === 'error' 
+                                ? 'bg-red-900/90 border-red-500/50 text-white' 
+                                : 'bg-slate-900/95 border-blue-500/50 text-white'
+                            }`}>
+                                <div className={`w-2.5 h-2.5 rounded-full ${toast.type === 'error' ? 'bg-red-400' : 'bg-blue-400'} animate-ping`}></div>
+                                <span className="text-xs font-bold">{toast.message}</span>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL: SWITCH PROFILE */}
-                    {showSwitchProfileModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl border border-slate-100 max-h-[80vh] flex flex-col">
-                                <div className="flex justify-between items-center mb-4 pb-2 border-b">
-                                    <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">Chọn Giao Diện Suử Dụng</h3>
-                                    <button onClick={() => setShowSwitchProfileModal(false)} className="text-slate-400 p-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                    </button>
+                    {/* Main Content Container */}
+                    <div className="relative z-10 flex-1 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8">
+                        
+                        {/* Header Navbar */}
+                        <header className="glass-card rounded-3xl p-4 sm:p-6 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-2xl">
+                            <div className="flex items-center space-x-3">
+                                <div 
+                                    className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-lg transform hover:rotate-6 transition-transform"
+                                    style={{ backgroundColor: themeColor }}
+                                >
+                                    JFF
                                 </div>
-                                
-                                <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-                                    {profiles.map(prof => (
-                                        <div 
-                                            key={prof.id}
-                                            onClick={() => {
-                                                setActiveProfileId(prof.id);
-                                                setShowSwitchProfileModal(false);
-                                            }}
-                                            className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${prof.id === activeProfileId ? 'bg-blue-50 border-blue-500 shadow-sm' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
-                                        >
-                                            <div>
-                                                <p className={`text-xs font-black ${prof.id === activeProfileId ? 'text-blue-700' : 'text-slate-800'}`}>{prof.name}</p>
-                                                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{prof.funds.length} ô quỹ</p>
-                                            </div>
-                                            {prof.id === activeProfileId ? (
-                                                <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center text-white">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <div>
+                                    <h1 className="font-extrabold text-lg sm:text-xl text-white tracking-tight flex items-center gap-2">
+                                        Jiro Financial Freedom
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-semibold border border-white/10">v2.5</span>
+                                    </h1>
+                                    <p className="text-xs text-slate-400">Giao diện đang dùng: <span className="font-bold text-slate-200">{activeProfile.name}</span></p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={() => setShowSettings(true)}
+                                    className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white rounded-2xl border border-white/10 transition-all flex items-center space-x-2 text-xs font-bold"
+                                    title="Tùy chỉnh giao diện & màu sắc"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    <span className="hidden sm:inline">Cài Đặt</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        {/* Navigation Tabs */}
+                        <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-white/10 mb-6 backdrop-blur-md overflow-x-auto scrollbar-none">
+                            <button
+                                onClick={() => setActiveTab('calc')}
+                                className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
+                                    activeTab === 'calc' ? 'bg-white/15 text-white shadow-lg border border-white/10' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
+                                <span>Nhập Liệu</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('config')}
+                                className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
+                                    activeTab === 'config' ? 'bg-white/15 text-white shadow-lg border border-white/10' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <span>Cấu Hình Quỹ</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('history')}
+                                className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
+                                    activeTab === 'history' ? 'bg-white/15 text-white shadow-lg border border-white/10' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+                                <span>Lịch Sử</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('rules')}
+                                className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
+                                    activeTab === 'rules' ? 'bg-white/15 text-white shadow-lg border border-white/10' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                                <span>Quy Tắc</span>
+                            </button>
+                        </div>
+
+                        {/* TAB 1: CALCULATION / INCOME ALLOCATION */}
+                        {}
+                        {activeTab === 'calc' && (
+                            <div className="space-y-6">
+                                {/* Income Input Banner */}
+                                <div className="glass-card rounded-3xl p-6 shadow-2xl">
+                                    <div className="max-w-xl mx-auto text-center space-y-4">
+                                        <h2 className="text-sm font-bold text-slate-300 uppercase tracking-widest">
+                                            Nhập Tổng Thu Nhập Cần Chia ({activeProfile.name})
+                                        </h2>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={incomeInput}
+                                                onChange={(e) => setIncomeInput(e.target.value)}
+                                                placeholder="VD: 15000000"
+                                                className="w-full bg-slate-900/90 text-white font-black text-2xl sm:text-3xl text-center py-4 px-6 rounded-2xl border border-white/15 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-600 shadow-inner"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">VND</span>
+                                        </div>
+                                        {incomeInput && (
+                                            <p className="text-xl font-black text-emerald-400 animate-in fade-in duration-200">
+                                                = {formatVND(incomeInput)}
+                                            </p>
+                                        )}
+                                        {totalProfilePercent !== 100 && (
+                                            <p className="text-xs font-bold text-amber-400 bg-amber-500/10 py-1.5 px-3 rounded-xl border border-amber-500/20 inline-block">
+                                                ⚠️ Lưu ý: Tổng % các quỹ hiện tại là {totalProfilePercent}%. Hãy chỉnh về 100% ở tab Cấu Hình Quỹ để chia chuẩn nhất!
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Funds Allocation Cards Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {activeProfile.funds.map((fund) => {
+                                        const amount = Math.round((Number(incomeInput) || 0) * (fund.percent / 100));
+                                        return (
+                                            <div 
+                                                key={fund.id}
+                                                className="glass-card glass-card-hover rounded-3xl p-5 shadow-xl flex flex-col justify-between relative overflow-hidden"
+                                            >
+                                                <div 
+                                                    className="absolute top-0 left-0 right-0 h-1.5" 
+                                                    style={{ backgroundColor: fund.color || themeColor }}
+                                                ></div>
+
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-start">
+                                                        <h3 className="font-bold text-base text-white pr-2">{fund.name}</h3>
+                                                        <span 
+                                                            className="px-2.5 py-1 rounded-xl text-xs font-black text-white shadow-sm shrink-0"
+                                                            style={{ backgroundColor: fund.color || themeColor }}
+                                                        >
+                                                            {fund.percent}%
+                                                        </span>
+                                                    </div>
+                                                    {fund.desc && (
+                                                        <p className="text-xs text-slate-400 leading-relaxed">{fund.desc}</p>
+                                                    )}
                                                 </div>
-                                            ) : profiles.length > 1 ? (
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteProfile(prof.id);
-                                                    }}
-                                                    className="text-slate-300 hover:text-red-500 p-1.5 transition-colors"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                                </button>
-                                            ) : null}
+
+                                                <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-end">
+                                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Số tiền quỹ</span>
+                                                    <span className="text-lg font-black text-white" style={{ color: fund.color || '#fff' }}>
+                                                        {formatVND(amount)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Action Bar */}
+                                {incomeInput > 0 && (
+                                    <div className="flex justify-center pt-2">
+                                        <button
+                                            onClick={handleSaveHistory}
+                                            className="py-4 px-8 rounded-2xl font-black text-xs uppercase tracking-wider text-white shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center space-x-2"
+                                            style={{ backgroundColor: themeColor }}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                            <span>Lưu Phân Bổ Này Vào Lịch Sử</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* TAB 2: CONFIG / CUSTOMIZE PROFILE FUNDS */}
+                        {}
+                        {activeTab === 'config' && (
+                            <div className="space-y-6">
+                                {/* Profile Info & Percentage Bar */}
+                                <div className="glass-card rounded-3xl p-6 shadow-2xl">
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                                        <div>
+                                            <h2 className="font-extrabold text-lg text-white">Tùy Chỉnh Ô Quỹ - {activeProfile.name}</h2>
+                                            <p className="text-xs text-slate-400">Bạn có thể đổi tên, đổi % hoặc thêm/xóa các ô quỹ theo nhu cầu riêng</p>
+                                        </div>
+                                        <div className="flex items-center space-x-3">
+                                            <span className={`text-sm font-black px-4 py-2 rounded-2xl border ${
+                                                totalProfilePercent === 100 
+                                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                                                : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                            }`}>
+                                                Tổng: {totalProfilePercent}% / 100%
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Realtime Progress Bar */}
+                                    <div className="w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-white/10 flex">
+                                        {activeProfile.funds.map((f, i) => (
+                                            <div 
+                                                key={f.id} 
+                                                style={{ width: `${Math.min(f.percent, 100)}%`, backgroundColor: f.color || themeColor }}
+                                                className="h-full transition-all duration-300"
+                                                title={`${f.name}: ${f.percent}%`}
+                                            ></div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Custom Funds List Editor */}
+                                <div className="space-y-4">
+                                    {activeProfile.funds.map((fund, index) => (
+                                        <div key={fund.id} className="glass-card rounded-3xl p-5 shadow-xl flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                                            <div className="flex items-center space-x-3 w-full md:w-auto">
+                                                <span className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs bg-white/10 text-slate-300">
+                                                    #{index + 1}
+                                                </span>
+                                                <div className="flex-1 md:w-64">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tên Ô Quỹ</label>
+                                                    <input
+                                                        type="text"
+                                                        value={fund.name}
+                                                        onChange={(e) => handleUpdateFund(fund.id, 'name', e.target.value)}
+                                                        className="w-full bg-slate-900/90 text-white font-bold text-sm px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center space-x-4 w-full md:w-auto">
+                                                <div className="w-32">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tỷ lệ (%)</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="100"
+                                                            value={fund.percent}
+                                                            onChange={(e) => handleUpdateFund(fund.id, 'percent', Number(e.target.value))}
+                                                            className="w-full bg-slate-900/90 text-white font-black text-sm px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                                        />
+                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">%</span>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Màu hiển thị</label>
+                                                    <input
+                                                        type="color"
+                                                        value={fund.color || themeColor}
+                                                        onChange={(e) => handleUpdateFund(fund.id, 'color', e.target.value)}
+                                                        className="w-10 h-9 rounded-xl bg-slate-900 border border-white/10 cursor-pointer"
+                                                    />
+                                                </div>
+
+                                                <div className="pt-5">
+                                                    <button
+                                                        onClick={() => handleDeleteFund(fund.id)}
+                                                        className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all"
+                                                        title="Xóa ô quỹ này"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
 
-                                <button 
-                                    onClick={() => {
-                                        setShowSwitchProfileModal(false);
-                                        setShowNewProfileModal(true);
-                                    }}
-                                    className="w-full mt-4 py-3 bg-slate-100 text-slate-700 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-colors"
-                                >
-                                    + Tạo Giao Diện Mới
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: SETTINGS */}
-                    {showSettings && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-md">
-                            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                                <div className="p-6 border-b flex justify-between items-center bg-slate-50">
-                                    <h2 className="font-black text-slate-800 uppercase tracking-tighter text-sm">Cài đặt Hệ thống</h2>
-                                    <button onClick={() => setShowSettings(false)} className="text-slate-400 p-2 rounded-full bg-white border border-slate-200">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                {/* Add New Fund Button */}
+                                <div className="flex justify-center pt-2">
+                                    <button
+                                        onClick={handleAddFund}
+                                        className="py-3.5 px-6 rounded-2xl font-black text-xs uppercase tracking-wider text-slate-200 bg-white/10 hover:bg-white/15 border border-white/15 shadow-xl transition-all flex items-center space-x-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                        <span>+ Thêm Ô Quỹ Mới</span>
                                     </button>
                                 </div>
-                                <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase block tracking-widest text-center">Sao lưu Dữ liệu (Offline)</label>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            <button onClick={() => {
-                                                const blob = new Blob([JSON.stringify({fundData, rules, gmtOffset, profiles, activeProfileId})], {type: "application/json"});
-                                                const url = URL.createObjectURL(blob);
-                                                const a = document.createElement("a"); a.href = url; a.download=`jff_backup_${todayStr}.json`; a.click();
-                                            }} className="bg-slate-900 text-white py-3.5 rounded-2xl font-black text-[11px] shadow-lg shadow-slate-200">XUẤT FILE SAO LƯU (.JSON)</button>
-                                            
-                                            <button onClick={() => importInputRef.current.click()} className="bg-blue-600 text-white py-3.5 rounded-2xl font-black text-[11px] shadow-lg shadow-blue-100">NHẬP FILE DỮ LIỆU</button>
-                                        </div>
-                                        <input type="file" ref={importInputRef} onChange={(e) => {
-                                            const file = e.target.files[0];
-                                            if(!file) return;
-                                            const reader = new FileReader();
-                                            reader.onload = (ev) => {
-                                                try {
-                                                    const d = JSON.parse(ev.target.result);
-                                                    if(d.fundData) setFundData(d.fundData);
-                                                    if(d.rules) setRules(d.rules);
-                                                    if(d.profiles) setProfiles(d.profiles);
-                                                    if(d.activeProfileId) setActiveProfileId(d.activeProfileId);
-                                                    alert("Cập nhật dữ liệu thành công!");
-                                                    setShowSettings(false);
-                                                } catch(err) { alert("File không hợp lệ!"); }
-                                            };
-                                            reader.readAsText(file);
-                                        }} className="hidden" accept=".json" />
-                                    </div>
+                            </div>
+                        )}
 
-                                    <div className="space-y-3 pt-4 border-t">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase block tracking-widest text-center">Giao diện người dùng</label>
-                                        <button onClick={() => bgInputRef.current.click()} className="w-full bg-slate-100 py-3.5 rounded-2xl font-black text-xs text-slate-600 border border-slate-200">ĐỔI ẢNH NỀN</button>
-                                        <input type="file" ref={bgInputRef} onChange={(e) => {
-                                            const reader = new FileReader();
-                                            reader.onload = (ev) => setTempImage(ev.target.result);
-                                            reader.readAsDataURL(e.target.files[0]);
-                                        }} className="hidden" />
+                        {/* TAB 3: HISTORY / TRA CỨU */}
+                        {}
+                        {activeTab === 'history' && (
+                            <div className="space-y-6">
+                                {/* Search & Filter controls */}
+                                <div className="glass-card rounded-3xl p-5 shadow-2xl flex flex-col sm:flex-row justify-between items-center gap-4">
+                                    <div>
+                                        <h2 className="font-extrabold text-base text-white">Lịch Sử Phân Bổ Tài Chính</h2>
+                                        <p className="text-xs text-slate-400">Tra cứu chi tiết các lần phân bổ thu nhập đã lưu</p>
                                     </div>
+                                    <div className="flex items-center space-x-3 w-full sm:w-auto">
+                                        <input
+                                            type="date"
+                                            value={filterDate}
+                                            onChange={(e) => setFilterDate(e.target.value)}
+                                            className="bg-slate-900/90 text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                        />
+                                        {filterDate && (
+                                            <button 
+                                                onClick={() => setFilterDate('')}
+                                                className="text-xs font-bold text-slate-400 hover:text-white underline"
+                                            >
+                                                Xóa lọc
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
 
-                                    <div className="text-center pt-2">
-                                        <p className="text-[9px] text-slate-400 font-bold uppercase leading-relaxed">
-                                            Dữ liệu lưu an toàn tại Local Storage.<br/>Hãy xuất file định kỳ để bảo vệ dữ liệu.
+                                {/* History Records */}
+                                {historyData.length === 0 ? (
+                                    <div className="glass-card rounded-3xl p-12 text-center text-slate-400 space-y-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-slate-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        <p className="font-bold text-sm">Chưa có lịch sử phân bổ nào được lưu</p>
+                                        <p className="text-xs text-slate-500">Hãy nhập số tiền ở tab Nhập Liệu và bấm "Lưu Phân Bổ" nhé!</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {historyData
+                                            .filter(h => !filterDate || h.date === filterDate)
+                                            .map((record) => (
+                                                <div key={record.id} className="glass-card rounded-3xl p-5 shadow-xl space-y-4">
+                                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-3 gap-2">
+                                                        <div>
+                                                            <span className="text-xs font-bold text-slate-400">{record.date} ({record.time})</span>
+                                                            <h3 className="font-extrabold text-base text-white">
+                                                                Tổng thu nhập: <span className="text-emerald-400">{formatVND(record.totalIncome)}</span>
+                                                            </h3>
+                                                        </div>
+                                                        <div className="flex items-center space-x-3">
+                                                            <span className="px-3 py-1 rounded-xl text-xs font-bold bg-white/10 text-slate-300 border border-white/10">
+                                                                {record.profileName}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => handleDeleteHistory(record.id)}
+                                                                className="text-red-400 hover:text-red-300 p-1"
+                                                                title="Xóa bản ghi"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                                                        {record.allocations.map((alloc, idx) => (
+                                                            <div key={idx} className="bg-slate-900/60 p-2.5 rounded-2xl border border-white/5 space-y-1">
+                                                                <span className="text-[10px] font-bold text-slate-400 truncate block">{alloc.fundName} ({alloc.percent}%)</span>
+                                                                <span className="text-xs font-black text-white block">{formatVND(alloc.amount)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* TAB 4: FINANCIAL RULES */}
+                        {}
+                        {activeTab === 'rules' && (
+                            <div className="space-y-6">
+                                <div className="glass-card rounded-3xl p-6 shadow-2xl space-y-2">
+                                    <h2 className="font-extrabold text-lg text-white">Nguyên Tắc Quản Lý Tài Chính JFF</h2>
+                                    <p className="text-xs text-slate-400">Quy tắc 6 hũ tài chính giúp bạn làm chủ tiền bạc và đạt tự do tài chính bền vững.</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="glass-card rounded-3xl p-5 space-y-2">
+                                        <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-black text-sm mb-2">1</div>
+                                        <h3 className="font-bold text-sm text-white">Trả cho bản thân trước</h3>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Ngay khi nhận thu nhập, hãy lập tức phân bổ vào các quỹ (Đầu tư, Tiết kiệm, Học tập) trước khi chi tiêu sinh hoạt.
+                                        </p>
+                                    </div>
+                                    <div className="glass-card rounded-3xl p-5 space-y-2">
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm mb-2">2</div>
+                                        <h3 className="font-bold text-sm text-white">Quỹ Tự Do Tài Chính (FFA) là cấm xâm phạm</h3>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Số tiền trong quỹ FFA chỉ dùng để đầu tư tạo ra thu nhập thụ động, tuyệt đối không dùng để tiêu xài.
+                                        </p>
+                                    </div>
+                                    <div className="glass-card rounded-3xl p-5 space-y-2">
+                                        <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-sm mb-2">3</div>
+                                        <h3 className="font-bold text-sm text-white">Đầu tư vào bản thân có lãi nhất</h3>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Dành ít nhất 10% cho Quỹ Học Tập (EDU) để đọc sách, học kỹ năng mới, nâng cao năng lực kiếm tiền.
+                                        </p>
+                                    </div>
+                                    <div className="glass-card rounded-3xl p-5 space-y-2">
+                                        <div className="w-8 h-8 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center font-black text-sm mb-2">4</div>
+                                        <h3 className="font-bold text-sm text-white">Cân bằng cuộc sống với Quỹ PLAY</h3>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Hãy tiêu hết số tiền trong quỹ Hưởng Thụ hàng tháng/quý để thưởng cho bản thân mà không cảm thấy tội lỗi.
                                         </p>
                                     </div>
                                 </div>
                             </div>
+                        )}
+
+                    </div>
+
+                    {/* FIXED FLOATING ACTION BAR (Bottom Right) */}
+                    {}
+                    <div className="fixed bottom-6 right-6 z-40 flex items-center space-x-3">
+                        <button
+                            onClick={() => setShowSwitchProfileModal(true)}
+                            className="py-3 px-5 rounded-full bg-slate-900/90 text-slate-200 hover:text-white font-black text-xs uppercase tracking-wider border border-white/20 shadow-2xl backdrop-blur-xl hover:scale-105 active:scale-95 transition-all flex items-center space-x-2"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                            <span className="hidden sm:inline">Chuyển Giao Diện</span>
+                        </button>
+
+                        <button
+                            onClick={() => setShowNewProfileModal(true)}
+                            className="w-13 h-13 p-3.5 rounded-full text-white font-black shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center"
+                            style={{ backgroundColor: themeColor }}
+                            title="Tạo giao diện mới (Custom Quỹ)"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
+                    </div>
+
+                    {/* MODAL 1: CREATE NEW PROFILE */}
+                    {}
+                    {showNewProfileModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-md shadow-2xl border border-white/10 space-y-5">
+                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
+                                    <h3 className="font-extrabold text-white text-base">Tạo Giao Diện Mới (Giao diện 2, 3...)</h3>
+                                    <button onClick={() => setShowNewProfileModal(false)} className="text-slate-400 hover:text-white p-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
+
+                                <form onSubmit={handleCreateProfile} className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-300 uppercase block mb-1.5">Tên Giao Diện Mới</label>
+                                        <input
+                                            type="text"
+                                            value={newProfileName}
+                                            onChange={(e) => setNewProfileName(e.target.value)}
+                                            placeholder="VD: Giao Diện Đầu Tư, Giao Diện 2..."
+                                            className="w-full bg-slate-950 text-white font-bold text-sm px-4 py-3 rounded-2xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <p className="text-xs text-slate-400">Giao diện mới sẽ khởi tạo với 1 ô quỹ mặc định 100%. Sau đó bạn có thể tùy ý bấm dấu + để thêm ô quỹ mới!</p>
+
+                                    <div className="flex space-x-3 pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowNewProfileModal(false)}
+                                            className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-2xl font-bold text-xs uppercase"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="flex-1 py-3 text-white rounded-2xl font-black text-xs uppercase shadow-lg"
+                                            style={{ backgroundColor: themeColor }}
+                                        >
+                                            Tạo Giao Diện
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     )}
 
-                    {/* MODAL: IMAGE MODE DISPLAY */}
-                    {tempImage && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95">
-                            <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl">
-                                <h3 className="text-center font-black text-slate-800 mb-8 uppercase tracking-widest text-sm">Chế độ hiển thị ảnh</h3>
-                                <div className="space-y-4">
-                                    <button onClick={() => {setBgImage(tempImage); setBgMode('bg-crop'); localStorage.setItem('jff_bg', tempImage); setTempImage(null);}} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs shadow-xl shadow-blue-200">LẤY TOÀN BỘ MÀN HÌNH (CROP)</button>
-                                    <button onClick={() => {setBgImage(tempImage); setBgMode('bg-fit'); localStorage.setItem('jff_bg', tempImage); setTempImage(null);}} className="w-full py-4 bg-slate-100 text-slate-800 rounded-2xl font-black text-xs">HIỂN THỊ ĐỦ ẢNH (FIT)</button>
-                                    <button onClick={() => setTempImage(null)} className="w-full py-3 text-slate-400 font-bold text-[10px] uppercase">Hủy bỏ</button>
+                    {/* MODAL 2: SWITCH PROFILE */}
+                    {showSwitchProfileModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-md shadow-2xl border border-white/10 space-y-5">
+                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
+                                    <h3 className="font-extrabold text-white text-base">Chọn Giao Diện Đang Dùng</h3>
+                                    <button onClick={() => setShowSwitchProfileModal(false)} className="text-slate-400 hover:text-white p-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                                    {profiles.map((p) => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => {
+                                                setActiveProfileId(p.id);
+                                                setShowSwitchProfileModal(false);
+                                                showToast(`Đã chuyển sang: ${p.name}`);
+                                            }}
+                                            className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                                                activeProfileId === p.id 
+                                                ? 'bg-blue-600/20 border-blue-500 text-white' 
+                                                : 'bg-slate-950/60 border-white/10 text-slate-300 hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            <div>
+                                                <h4 className="font-bold text-sm">{p.name}</h4>
+                                                <span className="text-[10px] text-slate-400">{p.funds.length} Ô Quỹ</span>
+                                            </div>
+                                            {activeProfileId === p.id && (
+                                                <span className="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     )}
+
+                    {/* MODAL 3: SETTINGS (THEME, OPACITY, BLUR, BACKUP) */}
+                    {showSettings && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-lg shadow-2xl border border-white/10 space-y-6 max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
+                                    <h3 className="font-extrabold text-white text-base uppercase tracking-wider">Cài Đặt Giao Diện & Dữ Liệu</h3>
+                                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white p-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
+
+                                {/* Theme Presets */}
+                                <div className="space-y-3">
+                                    <label className="text-xs font-bold text-slate-300 uppercase block">Màu Sắc Chủ Đạo (Theme Color)</label>
+                                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                                        {COLOR_PRESETS.map((preset) => (
+                                            <button
+                                                key={preset.hex}
+                                                onClick={() => setThemeColor(preset.hex)}
+                                                className={`p-2 rounded-2xl border text-[10px] font-bold flex flex-col items-center space-y-1 transition-all ${
+                                                    themeColor === preset.hex ? 'border-white ring-2 ring-white/50' : 'border-white/10 hover:border-white/30'
+                                                }`}
+                                            >
+                                                <span className="w-5 h-5 rounded-full shadow-sm" style={{ backgroundColor: preset.hex }}></span>
+                                                <span className="text-slate-300 truncate w-full text-center">{preset.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Opacity & Blur Sliders */}
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="flex justify-between text-xs font-bold text-slate-300 mb-1">
+                                            <span>Độ Trong Suốt Ô Quỹ (Glass Opacity)</span>
+                                            <span>{glassOpacity}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="30"
+                                            max="100"
+                                            value={glassOpacity}
+                                            onChange={(e) => setGlassOpacity(Number(e.target.value))}
+                                            className="w-full accent-blue-500 bg-slate-800 rounded-lg cursor-pointer"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <div className="flex justify-between text-xs font-bold text-slate-300 mb-1">
+                                            <span>Độ Mờ Nhòe (Glass Blur)</span>
+                                            <span>{glassBlur}px</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="30"
+                                            value={glassBlur}
+                                            onChange={(e) => setGlassBlur(Number(e.target.value))}
+                                            className="w-full accent-blue-500 bg-slate-800 rounded-lg cursor-pointer"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Wallpaper Selection */}
+                                <div className="space-y-3 pt-2 border-t border-white/10">
+                                    <label className="text-xs font-bold text-slate-300 uppercase block">Ảnh Nền Giao Diện</label>
+                                    <div className="flex items-center space-x-3">
+                                        <input
+                                            type="file"
+                                            ref={bgInputRef}
+                                            accept="image/*"
+                                            onChange={handleImageSelect}
+                                            className="hidden"
+                                        />
+                                        <button
+                                            onClick={() => bgInputRef.current && bgInputRef.current.click()}
+                                            className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-bold text-xs border border-white/10"
+                                        >
+                                            🖼️ Tải Ảnh & Cắt Ảnh
+                                        </button>
+                                        {bgImage && (
+                                            <button
+                                                onClick={() => {
+                                                    setBgImage(null);
+                                                    localStorage.removeItem('jff_bg');
+                                                    showToast("Đã xóa ảnh nền!");
+                                                }}
+                                                className="text-xs text-red-400 hover:underline font-bold"
+                                            >
+                                                Xóa Ảnh
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Backup & Sync Data */}
+                                <div className="space-y-3 pt-2 border-t border-white/10">
+                                    <label className="text-xs font-bold text-slate-300 uppercase block">Sao Lưu & Đám Mây (Cloud Sync)</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={handleExportData}
+                                            className="py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-bold text-xs border border-white/10"
+                                        >
+                                            📥 Xuất File Backup (.json)
+                                        </button>
+                                        <label className="py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-bold text-xs border border-white/10 text-center cursor-pointer block">
+                                            📤 Nhập File Backup
+                                            <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL 4: INTERACTIVE IMAGE CROPPER TOOL */}
+                    {tempImage && (
+                        <div className="fixed inset-0 z-[130] flex items-center justify-center p-3 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+                            <div className="bg-slate-900 rounded-3xl p-5 w-full max-w-lg shadow-2xl border border-white/10 flex flex-col max-h-[92vh]">
+                                <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/10">
+                                    <div>
+                                        <h3 className="font-extrabold text-white text-sm">Cắt & Điều Chỉnh Ảnh Nền</h3>
+                                        <p className="text-[10px] text-slate-400">Di chuyển, phóng to hoặc xoay khung cắt</p>
+                                    </div>
+                                    <button onClick={() => setTempImage(null)} className="text-slate-400 hover:text-white p-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
+
+                                <div className="relative w-full flex-1 min-h-[260px] max-h-[380px] bg-black rounded-2xl overflow-hidden mb-3 border border-white/10 flex items-center justify-center">
+                                    <img ref={cropImageRef} src={tempImage} alt="Crop target" className="max-w-full block" />
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="flex justify-center space-x-1 bg-slate-800 p-1.5 rounded-xl border border-white/10">
+                                        <button 
+                                            onClick={() => setAspectRatio(9 / 16)} 
+                                            className={`px-3 py-1 rounded-lg text-[10px] font-bold ${aspectRatio === 9/16 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                                        >
+                                            9:16
+                                        </button>
+                                        <button 
+                                            onClick={() => setAspectRatio(1)} 
+                                            className={`px-3 py-1 rounded-lg text-[10px] font-bold ${aspectRatio === 1 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                                        >
+                                            1:1
+                                        </button>
+                                        <button 
+                                            onClick={() => setAspectRatio(16 / 9)} 
+                                            className={`px-3 py-1 rounded-lg text-[10px] font-bold ${aspectRatio === 16/9 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                                        >
+                                            16:9
+                                        </button>
+                                        <button 
+                                            onClick={() => setAspectRatio(NaN)} 
+                                            className={`px-3 py-1 rounded-lg text-[10px] font-bold ${isNaN(aspectRatio) ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                                        >
+                                            Tự Do
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button 
+                                            onClick={() => setTempImage(null)} 
+                                            className="py-3 bg-slate-800 text-slate-300 rounded-2xl font-bold text-xs uppercase"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button 
+                                            onClick={handleApplyCrop} 
+                                            className="py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase shadow-lg"
+                                        >
+                                            Áp Dụng (OK)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        // Mount React Root
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
         root.render(<App />);
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('data:text/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdmZXRjaCcsIGV2ID0+IGV2LnJlc3BvbmRXaXRoKGZldGNoKGV2LnJlcXVlc3QpKSk7').catch(() => {});
-            });
-        }
     </script>
 </body>
 </html>
