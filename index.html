@@ -75,23 +75,33 @@
             { name: 'Xanh Cổ Vịt', hex: '#06b6d4' }
         ];
 
+        const GMT_OPTIONS = [];
+        for (let i = -12; i <= 14; i++) {
+            const sign = i > 0 ? '+' : '';
+            GMT_OPTIONS.push({ value: i, label: `GMT ${sign}${i}` });
+        }
+
         // Format VND helper
         const formatVND = (amount) => {
             if (isNaN(amount) || amount === null || amount === undefined) return '0 ₫';
             return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
         };
 
-        const getTodayString = () => {
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
+        const getTZDate = (offset) => {
+            const now = new Date();
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            return new Date(utc + (3600000 * offset));
+        };
+
+        const formatTZDate = (tzDate) => {
+            const year = tzDate.getFullYear();
+            const month = String(tzDate.getMonth() + 1).padStart(2, '0');
+            const day = String(tzDate.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
 
-        const getTimeString = () => {
-            const today = new Date();
-            return today.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        const formatTZTime = (tzDate) => {
+            return tzDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         };
 
         function App() {
@@ -126,9 +136,23 @@
                 return localStorage.getItem('jff_bg_image_v3') || '';
             });
 
+            // Tự động nhận diện GMT mặc định của trình duyệt hoặc lấy dữ liệu đã lưu
+            const [gmtOffset, setGmtOffset] = useState(() => {
+                const saved = localStorage.getItem('jff_gmt_offset_v3');
+                return saved !== null ? Number(saved) : (-(new Date().getTimezoneOffset() / 60));
+            });
+
+            const [currentTZDate, setCurrentTZDate] = useState(() => {
+                return localStorage.getItem('jff_last_date_v3') || '';
+            });
+
+            const [realTime, setRealTime] = useState('--:--:--');
+
             // Navigation & Modal States
             const [activeTab, setActiveTab] = useState('input');
-            const [incomeInput, setIncomeInput] = useState('');
+            const [incomeInput, setIncomeInput] = useState(() => {
+                return localStorage.getItem('jff_current_income_v3') || '';
+            });
             const [showSettings, setShowSettings] = useState(false);
             const [showNewProfileModal, setShowNewProfileModal] = useState(false);
             const [showSwitchProfileModal, setShowSwitchProfileModal] = useState(false);
@@ -146,6 +170,17 @@
             const [cropAspectRatio, setCropAspectRatio] = useState(NaN);
             const imageRef = useRef(null);
             const cropperRef = useRef(null);
+
+            // Refs để giữ state mới nhất cho hàm chạy ngầm (tránh stale closures)
+            const incomeRef = useRef(incomeInput);
+            const profileRef = useRef(activeProfileId);
+            const profilesRef = useRef(profiles);
+            const dateRef = useRef(currentTZDate);
+            
+            useEffect(() => { incomeRef.current = incomeInput; }, [incomeInput]);
+            useEffect(() => { profileRef.current = activeProfileId; }, [activeProfileId]);
+            useEffect(() => { profilesRef.current = profiles; }, [profiles]);
+            useEffect(() => { dateRef.current = currentTZDate; }, [currentTZDate]);
 
             useEffect(() => {
                 localStorage.setItem('jff_profiles_v3', JSON.stringify(profiles));
@@ -174,6 +209,95 @@
             useEffect(() => {
                 localStorage.setItem('jff_bg_image_v3', bgImage);
             }, [bgImage]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_current_income_v3', incomeInput);
+            }, [incomeInput]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_gmt_offset_v3', gmtOffset.toString());
+            }, [gmtOffset]);
+
+            // Logic Cập nhật Giờ Thực Tế & Tự Động Lưu khi sang ngày mới
+            useEffect(() => {
+                // Kiểm tra khi vừa mở web xem có phải đã qua ngày mới không
+                const checkBootAutoSave = () => {
+                    const savedDate = localStorage.getItem('jff_last_date_v3');
+                    const savedIncome = Number(localStorage.getItem('jff_current_income_v3') || 0);
+                    const tzDateObj = getTZDate(gmtOffset);
+                    const todayStr = formatTZDate(tzDateObj);
+
+                    if (savedDate && savedDate !== todayStr && savedIncome > 0) {
+                        const activeProf = profilesRef.current.find(p => p.id === profileRef.current) || DEFAULT_PROFILES[0];
+                        const allocations = activeProf.funds.map(f => ({
+                            fundName: f.name,
+                            percent: f.percent,
+                            amount: Math.round((savedIncome * (f.percent || 0)) / 100)
+                        }));
+
+                        const newRecord = {
+                            id: Date.now().toString(),
+                            date: savedDate,
+                            time: "23:59:59",
+                            totalIncome: savedIncome,
+                            profileId: activeProf.id,
+                            profileName: activeProf.name,
+                            allocations: allocations
+                        };
+
+                        setHistoryData(prev => [newRecord, ...prev]);
+                        setIncomeInput('');
+                        showToast(`Đã tự động lưu phân bổ ngày ${savedDate} khi mở lại app`);
+                    }
+                    
+                    setCurrentTZDate(todayStr);
+                    localStorage.setItem('jff_last_date_v3', todayStr);
+                };
+
+                checkBootAutoSave();
+
+                const interval = setInterval(() => {
+                    const tzDateObj = getTZDate(gmtOffset);
+                    const newDateStr = formatTZDate(tzDateObj);
+                    const newTimeStr = formatTZTime(tzDateObj);
+                    
+                    setRealTime(newTimeStr);
+
+                    if (dateRef.current && newDateStr !== dateRef.current) {
+                        // Sang ngày mới -> Tự động tính toán & lưu
+                        const income = Number(incomeRef.current);
+                        if (income > 0) {
+                            const activeProf = profilesRef.current.find(p => p.id === profileRef.current) || DEFAULT_PROFILES[0];
+                            const allocations = activeProf.funds.map(f => ({
+                                fundName: f.name,
+                                percent: f.percent,
+                                amount: Math.round((income * (f.percent || 0)) / 100)
+                            }));
+
+                            const newRecord = {
+                                id: Date.now().toString(),
+                                date: dateRef.current,
+                                time: "23:59:59",
+                                totalIncome: income,
+                                profileId: activeProf.id,
+                                profileName: activeProf.name,
+                                allocations: allocations
+                            };
+
+                            setHistoryData(prev => [newRecord, ...prev]);
+                            setIncomeInput('');
+                            showToast(`Đã tự động lưu phân bổ ${formatVND(income)} cho ngày ${dateRef.current}`);
+                        }
+                        setCurrentTZDate(newDateStr);
+                        localStorage.setItem('jff_last_date_v3', newDateStr);
+                    } else if (!dateRef.current) {
+                        setCurrentTZDate(newDateStr);
+                        localStorage.setItem('jff_last_date_v3', newDateStr);
+                    }
+                }, 1000);
+                
+                return () => clearInterval(interval);
+            }, [gmtOffset]);
 
             const showToast = (message) => {
                 setToast(message);
@@ -242,34 +366,6 @@
             const handleAddIncome = (amount) => {
                 const current = Number(incomeInput) || 0;
                 setIncomeInput((current + amount).toString());
-            };
-
-            const handleSaveAllocation = () => {
-                const income = Number(incomeInput);
-                if (!income || income <= 0) {
-                    showToast('Vui lòng nhập số tiền thu nhập hợp lệ!');
-                    return;
-                }
-
-                const allocations = activeProfile.funds.map(f => ({
-                    fundName: f.name,
-                    percent: f.percent,
-                    amount: Math.round((income * (f.percent || 0)) / 100)
-                }));
-
-                const newRecord = {
-                    id: Date.now().toString(),
-                    date: getTodayString(),
-                    time: getTimeString(),
-                    totalIncome: income,
-                    profileId: activeProfile.id,
-                    profileName: activeProfile.name,
-                    allocations: allocations
-                };
-
-                setHistoryData([newRecord, ...historyData]);
-                setIncomeInput('');
-                showToast(`Đã lưu phân bổ ${formatVND(income)} thành công!`);
             };
 
             const handleDeleteHistory = (id) => {
@@ -360,7 +456,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `JFF_Financial_Backup_${getTodayString()}.json`;
+                a.download = `JFF_Financial_Backup_${currentTZDate}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
                 showToast('Đã tải xuống tệp sao lưu dữ liệu!');
@@ -413,16 +509,19 @@
                         <div className="max-w-5xl mx-auto flex items-center justify-between">
                             <div className="flex items-center space-x-3">
                                 <div 
-                                    className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg transition-transform hover:scale-105"
+                                    className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg transition-transform hover:scale-105 shrink-0"
                                     style={{ backgroundColor: themeColor }}
                                 >
                                     J
                                 </div>
                                 <div>
                                     <h1 className="font-extrabold text-base tracking-wide text-white flex items-center gap-2">
-                                        JFF <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 border border-white/10 font-medium text-slate-300">Tự Do Tài Chính</span>
+                                        JFF <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 border border-white/10 font-medium text-slate-300 hidden sm:inline-block">Tự Do Tài Chính</span>
                                     </h1>
-                                    <p className="text-[11px] text-slate-400 truncate max-w-[200px] sm:max-w-xs">{activeProfile.name}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <p className="text-[11px] text-slate-400 truncate max-w-[120px] sm:max-w-xs">{activeProfile.name}</p>
+                                        <span className="text-[10px] text-slate-300 bg-slate-800/80 px-1.5 py-0.5 rounded border border-white/10 font-mono tracking-wider">{realTime}</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -524,13 +623,11 @@
                                         )}
                                     </div>
 
-                                    <button
-                                        onClick={handleSaveAllocation}
-                                        className="w-full py-3.5 rounded-2xl text-white font-extrabold text-sm uppercase tracking-wider shadow-xl transition-all duration-200 hover:brightness-110 active:scale-[0.99]"
-                                        style={{ backgroundColor: themeColor }}
-                                    >
-                                        Lưu Phân Bổ Vào Lịch Sử
-                                    </button>
+                                    <div className="flex items-center justify-center p-3 rounded-xl bg-slate-900/50 border border-white/5">
+                                        <p className="text-[11px] font-medium text-slate-400 text-center leading-relaxed">
+                                            Số tiền này sẽ được tự động chia và <strong className="text-blue-400">lưu vào lịch sử khi qua 0:00 sáng</strong> ngày hôm sau. Không cần phải thao tác thủ công.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 {/* Fund Cards Grid - Uncluttered 2-Line Layout */}
@@ -845,8 +942,23 @@
                                     </button>
                                 </div>
 
+                                {/* GMT Timezone Selector */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-300 uppercase block">Múi giờ khu vực (Auto-save)</label>
+                                    <select
+                                        value={gmtOffset}
+                                        onChange={(e) => setGmtOffset(Number(e.target.value))}
+                                        className="w-full bg-slate-950 text-white text-sm font-bold px-4 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer"
+                                    >
+                                        {GMT_OPTIONS.map(opt => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-[10px] text-slate-400">Lịch sử sẽ tự động lưu khi đồng hồ chỉ 00:00 ở múi giờ này.</p>
+                                </div>
+
                                 {/* Theme Presets & Custom Color Wheel */}
-                                <div className="space-y-3">
+                                <div className="space-y-3 pt-3 border-t border-white/10">
                                     <label className="text-xs font-bold text-slate-300 uppercase block">Màu Sắc Chủ Đạo (Theme Color)</label>
                                     <div className="flex flex-wrap items-center gap-2">
                                         {COLOR_PRESETS.map((preset) => (
