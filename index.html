@@ -110,7 +110,7 @@
             return tzDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         };
 
-        // Mới: Hàm định dạng số có dấu chấm ngắt nghìn và cho phép số âm
+        // Hàm định dạng số có dấu chấm ngắt nghìn và cho phép số âm
         const formatVNDInput = (val) => {
             if (val === undefined || val === null) return '';
             let strVal = String(val);
@@ -123,7 +123,7 @@
             return isNegative ? '-' + formatted : formatted;
         };
 
-        // Mới: Hàm parse chuỗi định dạng về lại số nguyên để tính toán
+        // Hàm parse chuỗi định dạng về lại số nguyên để tính toán
         const parseFormattedNumber = (val) => {
             if (!val) return 0;
             return Number(String(val).replace(/[^\d-]/g, '')) || 0;
@@ -205,7 +205,7 @@
             const [tempRule, setTempRule] = useState(null);
             const [profileToDelete, setProfileToDelete] = useState(null);
 
-            // History Date Range Filters
+            // History Date Range Filters (Default to today)
             const [fromDate, setFromDate] = useState(() => {
                 const savedGmt = localStorage.getItem('jff_gmt_offset_v3');
                 const gmt = savedGmt !== null ? Number(savedGmt) : (-(new Date().getTimezoneOffset() / 60));
@@ -216,6 +216,9 @@
                 const gmt = savedGmt !== null ? Number(savedGmt) : (-(new Date().getTimezoneOffset() / 60));
                 return formatTZDate(getTZDate(gmt));
             });
+
+            // Expanded history record items
+            const [expandedRecordIds, setExpandedRecordIds] = useState({});
 
             // Image Cropper States
             const [tempImage, setTempImage] = useState(null);
@@ -282,7 +285,6 @@
 
             // Logic Cập nhật Giờ Thực Tế & Tự Động Lưu khi sang ngày mới
             useEffect(() => {
-                // Kiểm tra khi vừa mở web xem có phải đã qua ngày mới không
                 const checkBootAutoSave = () => {
                     const savedDate = localStorage.getItem('jff_last_date_v3');
                     const savedIncomeStr = localStorage.getItem('jff_current_income_v3') || '';
@@ -338,7 +340,6 @@
                     setRealTime(newTimeStr);
 
                     if (dateRef.current && newDateStr !== dateRef.current) {
-                        // Sang ngày mới -> Tự động tính toán & lưu
                         const income = parseFormattedNumber(incomeRef.current);
                         const additions = additionsRef.current || {};
                         const hasAdditions = Object.values(additions).some(v => v !== 0);
@@ -601,7 +602,6 @@
                         backgroundAttachment: 'fixed',
                     }}
                 >
-                    {/* Dynamic Glassmorphism styling */}
                     <style>{`
                         .glass-card {
                             background-color: rgba(15, 23, 42, ${glassOpacity / 100});
@@ -637,7 +637,7 @@
                             <button
                                 onClick={() => setShowSettings(true)}
                                 className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all active:scale-95 shadow-md"
-                                title="Cài Đặt Giao Diện & Dữ Liệu"
+                                title="Cài Đặt"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                             </button>
@@ -712,7 +712,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Quick Amount & Clear Actions */}
                                     {(incomeInput || Object.values(fundAdditions).some(v => v !== 0)) && (
                                         <div className="flex justify-end pt-1">
                                             <button
@@ -731,7 +730,6 @@
                                     </div>
                                 </div>
 
-                                {/* Fund Cards Grid - Uncluttered 2-Line Layout */}
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center px-1">
                                         <h3 className="font-extrabold text-xs uppercase text-slate-300 tracking-wider">
@@ -742,7 +740,6 @@
                                         </span>
                                     </div>
 
-                                    {/* 1 Column Mobile / 2 Columns PC */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                         {activeProfile.funds.map((fund) => {
                                             const income = parseFormattedNumber(incomeInput);
@@ -760,12 +757,10 @@
                                                     className="glass-card rounded-2xl p-3.5 transition-all hover:border-white/40 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 flex flex-col justify-center gap-1.5 group relative"
                                                     style={{ borderLeft: `4px solid ${fund.color || themeColor}` }}
                                                 >
-                                                    {/* Tooltip hint */}
                                                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                                                     </div>
 
-                                                    {/* Line 1: Fund Name & Percent */}
                                                     <div className="flex justify-between items-center gap-2 pr-4">
                                                         <h4 className="font-extrabold text-sm text-white truncate">{fund.name}</h4>
                                                         <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/10 text-slate-200 shrink-0">
@@ -773,9 +768,8 @@
                                                         </span>
                                                     </div>
 
-                                                    {/* Line 2: Allocated Amount */}
                                                     <div className="flex justify-between items-end mt-1">
-                                                        <span className="text-[10px] text-slate-400 font-medium opacity-60 group-hover:opacity-100 transition-opacity">Nhấn để nhập thêm/bớt</span>
+                                                        <span className="text-[10px] text-slate-400 font-medium opacity-60 group-hover:opacity-100 transition-opacity">Nhấn để nhập thủ công</span>
                                                         <div className="text-right">
                                                             {manualAdd !== 0 && (
                                                                 <span className={`text-[10px] font-bold block mb-0.5 ${manualAdd > 0 ? 'text-amber-400' : 'text-red-400'}`}>
@@ -881,7 +875,6 @@
                                         <p className="text-xs text-slate-400">Tra cứu chi tiết và tổng hợp số tiền theo khoảng thời gian</p>
                                     </div>
 
-                                    {/* Date Range Inputs */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-white/10 items-end">
                                         <div>
                                             <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Từ ngày</label>
@@ -904,7 +897,6 @@
                                         <div className="flex items-center space-x-2">
                                             <button 
                                                 onClick={() => {
-                                                    // Nút Tra Cứu: Kích hoạt/Cập nhật dữ liệu thống kê
                                                     showToast('Đã tra cứu dữ liệu theo khoảng thời gian!');
                                                 }}
                                                 className="flex-1 py-2.5 px-4 text-xs font-bold text-white rounded-xl shadow-lg transition-all"
@@ -914,10 +906,16 @@
                                             </button>
                                             {(fromDate || toDate) && (
                                                 <button 
-                                                    onClick={() => { setFromDate(''); setToDate(''); }}
+                                                    onClick={() => { 
+                                                        const tzDateObj = getTZDate(gmtOffset);
+                                                        const todayStr = formatTZDate(tzDateObj);
+                                                        setFromDate(todayStr); 
+                                                        setToDate(todayStr); 
+                                                    }}
                                                     className="py-2.5 px-3 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl border border-red-500/20 transition-all"
+                                                    title="Đặt lại về ngày hiện tại"
                                                 >
-                                                    Xóa
+                                                    Hôm nay
                                                 </button>
                                             )}
                                         </div>
@@ -955,54 +953,72 @@
                                     </div>
                                 )}
 
-                                {/* History Records List */}
+                                {/* History Records List with Accordion / Dropdown Arrow */}
                                 {historyData.length === 0 ? (
                                     <div className="glass-card rounded-3xl p-12 text-center text-slate-400 space-y-3">
                                         <p className="font-bold text-sm">Chưa có lịch sử phân bổ nào được lưu</p>
-                                        <p className="text-xs text-slate-500">Hãy nhập số tiền ở tab Nhập Liệu và bấm "Lưu Phân Bổ" nhé!</p>
+                                        <p className="text-xs text-slate-500">Hệ thống sẽ tự động lưu vào 0h hàng ngày khi bạn có nhập liệu.</p>
                                     </div>
                                 ) : filteredHistory.length === 0 ? (
                                     <div className="glass-card rounded-3xl p-8 text-center text-slate-400 space-y-2">
                                         <p className="font-bold text-sm">Không tìm thấy bản ghi nào trong khoảng thời gian này</p>
-                                        <button onClick={() => { setFromDate(''); setToDate(''); }} className="text-xs font-bold text-blue-400 underline">
-                                            Hiển thị tất cả lịch sử
-                                        </button>
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
-                                        {filteredHistory.map((record) => (
-                                            <div key={record.id} className="glass-card rounded-3xl p-5 shadow-xl space-y-4">
-                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-3 gap-2">
-                                                    <div>
-                                                        <span className="text-xs font-bold text-slate-400">{record.date} ({record.time})</span>
-                                                        <h3 className="font-extrabold text-base text-white">
-                                                            Tổng thu nhập: <span className="text-emerald-400">{formatVND(record.totalIncome)}</span>
-                                                        </h3>
-                                                    </div>
-                                                    <div className="flex items-center space-x-3">
-                                                        <span className="px-3 py-1 rounded-xl text-xs font-bold bg-white/10 text-slate-300 border border-white/10">
-                                                            {record.profileName}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => handleDeleteHistory(record.id)}
-                                                            className="text-red-400 hover:text-red-300 p-1 font-bold text-xs"
-                                                            title="Xóa bản ghi"
-                                                        >
-                                                            Xóa
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                                                    {record.allocations.map((alloc, idx) => (
-                                                        <div key={idx} className="bg-slate-900/60 p-2.5 rounded-2xl border border-white/5 space-y-1">
-                                                            <span className="text-[10px] font-bold text-slate-400 truncate block">{alloc.fundName} ({alloc.percent}%)</span>
-                                                            <span className="text-xs font-black text-white block">{formatVND(alloc.amount)}</span>
+                                    <div className="space-y-3">
+                                        <h3 className="text-xs font-bold uppercase text-slate-400 px-1">Chi tiết các ngày ghi nhận ({filteredHistory.length})</h3>
+                                        {filteredHistory.map((record) => {
+                                            const isExpanded = !!expandedRecordIds[record.id];
+                                            return (
+                                                <div key={record.id} className="glass-card rounded-2xl p-4 shadow-lg transition-all space-y-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center space-x-3">
+                                                            <button
+                                                                onClick={() => setExpandedRecordIds(prev => ({ ...prev, [record.id]: !isExpanded }))}
+                                                                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 transition-transform duration-200"
+                                                                style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                                                                title="Xổ xuống xem chi tiết"
+                                                            >
+                                                                ▼
+                                                            </button>
+                                                            <div>
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="font-extrabold text-sm text-white">{record.date}</span>
+                                                                    <span className="text-[10px] text-slate-400 font-mono">({record.time})</span>
+                                                                </div>
+                                                                <p className="text-xs text-slate-300 font-medium">
+                                                                    Tổng thu: <strong className="text-emerald-400">{formatVND(record.totalIncome)}</strong>
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                    ))}
+
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/10 text-slate-300 border border-white/10 hidden sm:inline-block">
+                                                                {record.profileName}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => handleDeleteHistory(record.id)}
+                                                                className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all text-xs font-bold"
+                                                                title="Xóa bản ghi"
+                                                            >
+                                                                Xóa
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Dropdown specific allocations list */}
+                                                    {isExpanded && (
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-3 border-t border-white/10 animate-fadeIn">
+                                                            {record.allocations.map((alloc, idx) => (
+                                                                <div key={idx} className="bg-slate-900/80 p-2.5 rounded-xl border border-white/5 space-y-0.5">
+                                                                    <span className="text-[10px] font-bold text-slate-400 truncate block">{alloc.fundName} ({alloc.percent}%)</span>
+                                                                    <span className="text-xs font-black text-white block">{formatVND(alloc.amount)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -1047,7 +1063,6 @@
                                                         <div className="flex space-x-2">
                                                             <button 
                                                                 onClick={() => {
-                                                                    // Nếu đang tạo mới mà ấn hủy, ta xóa luôn rule đó
                                                                     if (rule.title === 'Tiêu đề quy tắc mới') {
                                                                         setRules(rules.filter(r => r.id !== rule.id));
                                                                     }
@@ -1141,7 +1156,7 @@
                                         className="w-full bg-slate-950 text-white font-bold text-lg px-4 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
                                         autoFocus
                                     />
-                                    <p className="text-[10px] text-slate-500">Ghi số âm (VD: -50000) nếu bạn chi tiêu lẹm vào quỹ này.</p>
+                                    <p className="text-[10px] text-slate-500">Ghi số âm (VD: -50.000) nếu bạn chi tiêu lẹm vào quỹ này.</p>
                                 </div>
                                 <div className="flex justify-end">
                                     <button onClick={() => setManualAmountInput('')} className="py-1.5 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-[10px] font-bold transition-all">Về 0</button>
@@ -1272,7 +1287,7 @@
                                                 <h4 className={`font-bold text-sm ${activeProfileId === p.id ? 'text-blue-400' : 'text-slate-200'}`}>{p.name}</h4>
                                                 <p className="text-[10px] text-slate-400">{p.funds.length} ô quỹ</p>
                                             </div>
-                                            {profiles.length > 1 && activeProfileId !== p.id && (
+                                            {profiles.length > 1 && (
                                                 <button onClick={() => setProfileToDelete(p)} className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all" title="Xóa giao diện">
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                                 </button>
@@ -1288,11 +1303,19 @@
                     {profileToDelete && (
                         <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
                             <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-red-500/30 space-y-4">
-                                <h3 className="font-extrabold text-red-400 text-base">Xác Nhận Xóa</h3>
-                                <p className="text-xs text-slate-300">Bạn có chắc chắn muốn xóa giao diện <strong>{profileToDelete.name}</strong> không? Các ô quỹ bên trong sẽ bị mất.</p>
+                                <h3 className="font-extrabold text-red-400 text-base">Xác Nhận Xóa Giao Diện</h3>
+                                <p className="text-xs text-slate-300">Bạn có muốn xóa giao diện <strong>{profileToDelete.name}</strong> không? Thao tác sẽ không thể hoàn tác.</p>
                                 <div className="flex space-x-3 pt-2">
-                                    <button onClick={() => setProfileToDelete(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Hủy</button>
-                                    <button onClick={() => { setProfiles(profiles.filter(p => p.id !== profileToDelete.id)); setProfileToDelete(null); showToast(`Đã xóa: ${profileToDelete.name}`); }} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-extrabold text-xs">Xóa Vĩnh Viễn</button>
+                                    <button onClick={() => setProfileToDelete(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Huỷ</button>
+                                    <button onClick={() => { 
+                                        const remaining = profiles.filter(p => p.id !== profileToDelete.id);
+                                        setProfiles(remaining); 
+                                        if (activeProfileId === profileToDelete.id && remaining.length > 0) {
+                                            setActiveProfileId(remaining[0].id);
+                                        }
+                                        setProfileToDelete(null); 
+                                        showToast(`Đã xóa: ${profileToDelete.name}`); 
+                                    }} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-extrabold text-xs">Ok</button>
                                 </div>
                             </div>
                         </div>
@@ -1307,13 +1330,13 @@
                                     <button onClick={() => setShowNewProfileModal(false)} className="text-slate-400 hover:text-white p-1 font-bold">✕</button>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[11px] font-bold text-slate-400 uppercase">Tên Giao Diện (VD: Lương Tháng, Phụ Cấp...)</label>
+                                    <label className="text-[11px] font-bold text-slate-400 uppercase">Tên Giao Diện</label>
                                     <input
                                         type="text"
                                         value={newProfileName}
                                         onChange={(e) => setNewProfileName(e.target.value)}
                                         className="w-full bg-slate-950 text-white font-bold text-sm px-4 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                        placeholder="Nhập tên..."
+                                        placeholder=""
                                         autoFocus
                                     />
                                 </div>
