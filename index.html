@@ -422,33 +422,70 @@
             // Aggregated sum for date range
             const historyTotals = useMemo(() => {
                 let grandTotal = 0;
-                const fundTotals = {};
+                
+                // Khởi tạo danh sách các quỹ theo đúng profile đang active (để đảm bảo chỉ hiển thị đúng số quỹ hiện tại)
+                const fundTotalsMap = {};
+                if (activeProfile && activeProfile.funds) {
+                    activeProfile.funds.forEach(f => {
+                        fundTotalsMap[f.id] = { 
+                            id: f.id,
+                            name: f.name, 
+                            amount: 0, 
+                            color: f.color 
+                        };
+                    });
+                }
+                
+                let deletedFundsAmount = 0;
 
                 filteredHistory.forEach(record => {
                     grandTotal += (Number(record.totalIncome) || 0);
+                    
                     if (record.allocations && Array.isArray(record.allocations)) {
-                        record.allocations.forEach(alloc => {
+                        record.allocations.forEach((alloc, index) => {
                             let amt = Number(alloc.amount) || 0;
-                            // Sử dụng fundId làm key nếu có, nếu không dùng tạm fundName
-                            let fundKey = alloc.fundId || alloc.fundName;
+                            let matched = false;
 
-                            if (!fundTotals[fundKey]) {
-                                // Cố gắng lấy màu của quỹ từ activeProfile nếu khớp, nếu không dùng màu mặc định
-                                let color = '#64748b'; 
-                                if (activeProfile && activeProfile.funds) {
-                                    const match = activeProfile.funds.find(f => f.id === alloc.fundId || f.name === alloc.fundName);
-                                    if (match) color = match.color;
+                            // 1. Cố gắng map theo ID quỹ
+                            if (fundTotalsMap[alloc.fundId]) {
+                                fundTotalsMap[alloc.fundId].amount += amt;
+                                matched = true;
+                            } 
+                            // 2. Cố gắng map theo tên quỹ (nếu ID bị đổi do xóa/tạo lại)
+                            else {
+                                const matchByName = activeProfile?.funds?.find(f => f.name === alloc.fundName);
+                                if (matchByName && fundTotalsMap[matchByName.id]) {
+                                    fundTotalsMap[matchByName.id].amount += amt;
+                                    matched = true;
                                 }
-                                fundTotals[fundKey] = { name: alloc.fundName, amount: 0, color: color };
                             }
-                            
-                            // Cộng dồn số tiền
-                            fundTotals[fundKey].amount += amt;
+
+                            // 3. Fallback: Map theo thứ tự (index) nếu người dùng xóa quỹ cũ và tạo lại quỹ mới thay thế
+                            if (!matched && activeProfile?.funds && activeProfile.funds[index]) {
+                                const fallbackFund = activeProfile.funds[index];
+                                if (fundTotalsMap[fallbackFund.id]) {
+                                    fundTotalsMap[fallbackFund.id].amount += amt;
+                                    matched = true;
+                                }
+                            }
+
+                            // 4. Nếu vẫn không map được, đưa vào mục "Khác" để không làm sai lệch tổng số
+                            if (!matched) {
+                                deletedFundsAmount += amt;
+                            }
                         });
                     }
                 });
 
-                return { grandTotal, fundTotals };
+                const fundTotalsArray = activeProfile && activeProfile.funds 
+                    ? activeProfile.funds.map(f => fundTotalsMap[f.id])
+                    : [];
+
+                return { 
+                    grandTotal, 
+                    fundTotals: fundTotalsArray, 
+                    deletedFundsAmount 
+                };
             }, [filteredHistory, activeProfile]);
 
             useEffect(() => {
@@ -989,14 +1026,22 @@
                                         <div>
                                             <h4 className="text-xs font-bold text-slate-300 uppercase mb-2">Tổng số tiền chi tiết của từng quỹ:</h4>
                                             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                                                {Object.entries(historyTotals.fundTotals).map(([fundId, fundData]) => (
-                                                    <div key={fundId} className="bg-slate-900/90 p-2 rounded-xl border border-white/10 space-y-1 shadow-sm flex flex-col justify-center" style={{ borderLeft: `3px solid ${fundData.color || themeColor}` }}>
+                                                {historyTotals.fundTotals.map((fundData) => (
+                                                    <div key={fundData.id} className="bg-slate-900/90 p-2 rounded-xl border border-white/10 space-y-1 shadow-sm flex flex-col justify-center" style={{ borderLeft: `3px solid ${fundData.color || themeColor}` }}>
                                                         <span className="text-[10px] font-bold text-slate-400 truncate block" title={fundData.name}>{fundData.name}</span>
                                                         <span className="text-[11px] font-black block truncate" style={{ color: fundData.color || themeColor }} title={formatVND(fundData.amount)}>
                                                             {formatVND(fundData.amount)}
                                                         </span>
                                                     </div>
                                                 ))}
+                                                {historyTotals.deletedFundsAmount !== 0 && (
+                                                    <div className="bg-slate-900/90 p-2 rounded-xl border border-white/10 space-y-1 shadow-sm flex flex-col justify-center" style={{ borderLeft: `3px solid #64748b` }}>
+                                                        <span className="text-[10px] font-bold text-slate-400 truncate block" title="Quỹ cũ đã xóa">Khác (Quỹ cũ)</span>
+                                                        <span className="text-[11px] font-black block truncate text-slate-300" title={formatVND(historyTotals.deletedFundsAmount)}>
+                                                            {formatVND(historyTotals.deletedFundsAmount)}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
