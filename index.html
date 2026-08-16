@@ -106,6 +106,12 @@
             return `${year}-${month}-${day}`;
         };
 
+        const formatFirstDayOfMonth = (tzDate) => {
+            const year = tzDate.getFullYear();
+            const month = String(tzDate.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}-01`;
+        };
+
         const formatTZTime = (tzDate) => {
             return tzDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         };
@@ -205,11 +211,10 @@
             const [tempRule, setTempRule] = useState(null);
             const [profileToDelete, setProfileToDelete] = useState(null);
 
-            // History Date Range Filters (Default to today)
             const [fromDate, setFromDate] = useState(() => {
                 const savedGmt = localStorage.getItem('jff_gmt_offset_v3');
                 const gmt = savedGmt !== null ? Number(savedGmt) : (-(new Date().getTimezoneOffset() / 60));
-                return formatTZDate(getTZDate(gmt));
+                return formatFirstDayOfMonth(getTZDate(gmt));
             });
             const [toDate, setToDate] = useState(() => {
                 const savedGmt = localStorage.getItem('jff_gmt_offset_v3');
@@ -904,25 +909,22 @@
                                             >
                                                 Tra Cứu
                                             </button>
-                                            {(fromDate || toDate) && (
-                                                <button 
-                                                    onClick={() => { 
-                                                        const tzDateObj = getTZDate(gmtOffset);
-                                                        const todayStr = formatTZDate(tzDateObj);
-                                                        setFromDate(todayStr); 
-                                                        setToDate(todayStr); 
-                                                    }}
-                                                    className="py-2.5 px-3 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl border border-red-500/20 transition-all"
-                                                    title="Đặt lại về ngày hiện tại"
-                                                >
-                                                    Hôm nay
-                                                </button>
-                                            )}
+                                            <button 
+                                                onClick={() => { 
+                                                    const tzDateObj = getTZDate(gmtOffset);
+                                                    setFromDate(formatFirstDayOfMonth(tzDateObj)); 
+                                                    setToDate(formatTZDate(tzDateObj)); 
+                                                }}
+                                                className="py-2.5 px-3 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl border border-red-500/20 transition-all shrink-0"
+                                                title="Đặt lại về tháng hiện tại"
+                                            >
+                                                Tháng này
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Aggregated Summary for Date Range */}
+                                {}
                                 {filteredHistory.length > 0 && (
                                     <div className="glass-card rounded-3xl p-5 shadow-xl space-y-4 border border-blue-500/20 bg-blue-950/20">
                                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-3 gap-2">
@@ -932,18 +934,18 @@
                                                     Tổng Thu Nhập Tất Cả Các Quỹ: <span className="text-emerald-400 font-black">{formatVND(historyTotals.grandTotal)}</span>
                                                 </h3>
                                             </div>
-                                            <span className="text-xs font-bold px-3 py-1 rounded-xl bg-white/10 text-slate-300 border border-white/10">
+                                            <span className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/10 text-slate-300 border border-white/10">
                                                 {filteredHistory.length} lần ghi nhận
                                             </span>
                                         </div>
 
                                         <div>
                                             <h4 className="text-xs font-bold text-slate-300 uppercase mb-2">Tổng số tiền chi tiết của từng quỹ:</h4>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
                                                 {Object.entries(historyTotals.fundTotals).map(([fundName, totalAmount]) => (
-                                                    <div key={fundName} className="bg-slate-900/90 p-3 rounded-2xl border border-white/10 space-y-1 shadow-md">
-                                                        <span className="text-[11px] font-bold text-slate-400 truncate block">{fundName}</span>
-                                                        <span className="text-sm font-black block" style={{ color: themeColor }}>
+                                                    <div key={fundName} className="bg-slate-900/90 p-2 rounded-xl border border-white/10 space-y-1 shadow-sm flex flex-col justify-center">
+                                                        <span className="text-[10px] font-bold text-slate-400 truncate block" title={fundName}>{fundName}</span>
+                                                        <span className="text-[11px] font-black block truncate" style={{ color: themeColor }} title={formatVND(totalAmount)}>
                                                             {formatVND(totalAmount)}
                                                         </span>
                                                     </div>
@@ -953,7 +955,7 @@
                                     </div>
                                 )}
 
-                                {/* History Records List with Accordion / Dropdown Arrow */}
+                                {}
                                 {historyData.length === 0 ? (
                                     <div className="glass-card rounded-3xl p-12 text-center text-slate-400 space-y-3">
                                         <p className="font-bold text-sm">Chưa có lịch sử phân bổ nào được lưu</p>
