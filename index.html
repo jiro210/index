@@ -309,6 +309,7 @@
                             const extra = savedAdditions[f.id] || 0;
                             totalSaved += extra;
                             return {
+                                fundId: f.id,
                                 fundName: f.name,
                                 percent: f.percent,
                                 amount: base + extra
@@ -357,6 +358,7 @@
                                 const extra = additions[f.id] || 0;
                                 totalIncomeRecord += extra;
                                 return {
+                                    fundId: f.id,
                                     fundName: f.name,
                                     percent: f.percent,
                                     amount: base + extra
@@ -417,20 +419,43 @@
             // Aggregated sum for date range
             const historyTotals = useMemo(() => {
                 let grandTotal = 0;
-                const fundTotals = {};
+                // Nhóm theo fundId thay vì fundName để gom các quỹ bị đổi tên lại với nhau
+                const fundTotalsById = {};
+                const fundNamesById = {};
 
                 filteredHistory.forEach(record => {
                     grandTotal += (Number(record.totalIncome) || 0);
                     if (record.allocations && Array.isArray(record.allocations)) {
                         record.allocations.forEach(alloc => {
+                            // Dùng fundId nếu có, nếu không thì fallback về fundName (cho dữ liệu cũ)
+                            const key = alloc.fundId || alloc.fundName || 'other';
                             const name = alloc.fundName || 'Khác';
-                            fundTotals[name] = (fundTotals[name] || 0) + (Number(alloc.amount) || 0);
+                            
+                            fundTotalsById[key] = (fundTotalsById[key] || 0) + (Number(alloc.amount) || 0);
+                            // Lưu tên mới nhất xuất hiện trong lịch sử cho key này
+                            fundNamesById[key] = name;
                         });
                     }
                 });
 
-                return { grandTotal, fundTotals };
-            }, [filteredHistory]);
+                // Chuyển đổi lại thành format mảng / object dễ render
+                // Ưu tiên lấy tên quỹ hiện tại từ activeProfile nếu ID trùng khớp
+                const displayFundTotals = {};
+                Object.keys(fundTotalsById).forEach(key => {
+                    let displayName = fundNamesById[key];
+                    if (activeProfile && activeProfile.funds) {
+                        const currentFund = activeProfile.funds.find(f => f.id === key);
+                        if (currentFund) {
+                            displayName = currentFund.name;
+                        }
+                    }
+                    // Gộp chung vào tên hiển thị cuối cùng
+                    displayFundTotals[displayName] = (displayFundTotals[displayName] || 0) + fundTotalsById[key];
+                });
+
+
+                return { grandTotal, fundTotals: displayFundTotals };
+            }, [filteredHistory, activeProfile]);
 
             useEffect(() => {
                 if (tempImage && imageRef.current) {
