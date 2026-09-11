@@ -127,7 +127,10 @@
                 funds: DEFAULT_FUNDS,
                 history: [],
                 bgImage: '',
-                timezone: 'Asia/Ho_Chi_Minh'
+                timezone: 'Asia/Ho_Chi_Minh',
+                draftIncome: '',
+                draftNote: '',
+                draftOverrides: {}
             }
         ];
 
@@ -246,42 +249,94 @@
             const currentTimezone = currentWs.timezone || 'Asia/Ho_Chi_Minh';
             const currentBgImage = currentWs.bgImage || '';
 
-            // Draft Input & Overrides with persistent local storage
-            const [totalIncomeInput, setTotalIncomeInput] = useState(() => {
-                return localStorage.getItem('jff_draft_income_v6') || '';
-            });
+            const totalIncomeInput = currentWs.draftIncome || '';
+            const incomeNote = currentWs.draftNote || '';
+            const overrides = currentWs.draftOverrides || {};
 
-            const [incomeNote, setIncomeNote] = useState('');
+            const setTotalIncomeInput = (val) => {
+                updateCurrentWorkspaceData(ws => ({
+                    ...ws,
+                    draftIncome: typeof val === 'function' ? val(ws.draftIncome || '') : val
+                }));
+            };
 
-            const [overrides, setOverrides] = useState(() => {
-                try {
-                    const saved = localStorage.getItem('jff_draft_overrides_v6');
-                    return saved ? JSON.parse(saved) : {};
-                } catch (e) {
-                    return {};
-                }
-            });
+            const setIncomeNote = (val) => {
+                updateCurrentWorkspaceData(ws => ({
+                    ...ws,
+                    draftNote: typeof val === 'function' ? val(ws.draftNote || '') : val
+                }));
+            };
 
-            // Save draft input & overrides to local storage whenever changed
-            useEffect(() => {
-                localStorage.setItem('jff_draft_income_v6', totalIncomeInput);
-            }, [totalIncomeInput]);
+            const setOverrides = (val) => {
+                updateCurrentWorkspaceData(ws => ({
+                    ...ws,
+                    draftOverrides: typeof val === 'function' ? val(ws.draftOverrides || {}) : val
+                }));
+            };
 
-            useEffect(() => {
-                localStorage.setItem('jff_draft_overrides_v6', JSON.stringify(overrides));
-            }, [overrides]);
-
-            // Check new day reset logic
+            // Check new day reset & auto-record logic
             useEffect(() => {
                 const todayStr = getDateStrInTZ(currentTimezone, nowDate);
                 const lastActiveDate = localStorage.getItem('jff_last_date_v6');
 
                 if (lastActiveDate && lastActiveDate !== todayStr) {
-                    setTotalIncomeInput('');
-                    setOverrides({});
-                    localStorage.setItem('jff_draft_income_v6', '');
-                    localStorage.setItem('jff_draft_overrides_v6', '{}');
+                    setWorkspaces(prevWorkspaces => {
+                        return prevWorkspaces.map(ws => {
+                            const income = parseVNDInput(ws.draftIncome);
+                            if (income > 0) {
+                                const wsFunds = ws.funds || DEFAULT_FUNDS;
+                                let defaultVndSum = 0;
+                                wsFunds.forEach(f => {
+                                    if (f.type === 'vnd') defaultVndSum += (Number(f.vndAmount) || 0);
+                                });
+                                const remainingForPercent = Math.max(0, income - defaultVndSum);
+                                const wsOverrides = ws.draftOverrides || {};
+
+                                const allocations = wsFunds.map(fund => {
+                                    let baseAllocated = 0;
+                                    if (fund.type === 'vnd') {
+                                        baseAllocated = Number(fund.vndAmount) || 0;
+                                    } else {
+                                        baseAllocated = Math.round((remainingForPercent * (Number(fund.percent) || 0)) / 100);
+                                    }
+                                    const isOverridden = wsOverrides[fund.id] !== undefined;
+                                    const finalAmount = isOverridden ? wsOverrides[fund.id] : baseAllocated;
+                                    return {
+                                        fundId: fund.id,
+                                        fundName: fund.name,
+                                        bankInfo: fund.bankInfo,
+                                        amount: finalAmount
+                                    };
+                                });
+
+                                const autoRecord = {
+                                    id: 'rec_auto_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                                    date: lastActiveDate,
+                                    timestamp: `${lastActiveDate} 23:59:59`,
+                                    totalIncome: income,
+                                    note: (ws.draftNote ? ws.draftNote + ' ' : '') + '(Tự động lưu khi sang ngày mới)',
+                                    allocations
+                                };
+
+                                return {
+                                    ...ws,
+                                    history: [autoRecord, ...(ws.history || [])],
+                                    draftIncome: '',
+                                    draftNote: '',
+                                    draftOverrides: {}
+                                };
+                            }
+                            return {
+                                ...ws,
+                                draftIncome: '',
+                                draftNote: '',
+                                draftOverrides: {}
+                            };
+                        });
+                    });
+
                     localStorage.setItem('jff_last_date_v6', todayStr);
+                    showToast('Đã tự động chốt thu nhập ngày hôm qua vào Lịch Sử!', 'success');
                 } else if (!lastActiveDate) {
                     localStorage.setItem('jff_last_date_v6', todayStr);
                 }
@@ -539,7 +594,10 @@
                     funds: DEFAULT_FUNDS,
                     history: [],
                     bgImage: currentBgImage,
-                    timezone: currentTimezone
+                    timezone: currentTimezone,
+                    draftIncome: '',
+                    draftNote: '',
+                    draftOverrides: {}
                 };
                 setWorkspaces(prev => [...prev, newWs]);
                 setActiveWsId(newId);
@@ -666,7 +724,13 @@
                     }))
                 };
 
-                setHistory(prev => [record, ...prev]);
+                updateCurrentWorkspaceData(ws => ({
+                    ...ws,
+                    history: [record, ...(ws.history || [])],
+                    draftIncome: '',
+                    draftNote: '',
+                    draftOverrides: {}
+                }));
                 showToast('Đã lưu lịch sử phân bổ thành công!', 'success');
             };
 
