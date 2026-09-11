@@ -39,6 +39,10 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.4);
         }
+        .drag-ghost {
+            opacity: 0.4;
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 antialiased selection:bg-blue-500 selection:text-white">
@@ -47,18 +51,18 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Default initial profile
+        // Default initial profile with type support ('percent' or 'vnd')
         const DEFAULT_PROFILES = [
             {
                 id: 'default-6-jars',
                 name: 'Giao Diện 1 (6 Quỹ Mặc Định)',
                 funds: [
-                    { id: '1', name: 'Nhu cầu thiết yếu (NEC)', percent: 55, color: '#ef4444' },
-                    { id: '2', name: 'Tự do tài chính (FFA)', percent: 10, color: '#3b82f6' },
-                    { id: '3', name: 'Tiết kiệm dài hạn (LTSS)', percent: 10, color: '#10b981' },
-                    { id: '4', name: 'Học tập & Phát triển (EDU)', percent: 10, color: '#f59e0b' },
-                    { id: '5', name: 'Hưởng thụ (PLAY)', percent: 10, color: '#ec4899' },
-                    { id: '6', name: 'Cho đi (GIVE)', percent: 5, color: '#8b5cf6' }
+                    { id: '1', name: 'Nhu cầu thiết yếu (NEC)', type: 'percent', percent: 55, vndAmount: 0, color: '#ef4444' },
+                    { id: '2', name: 'Tự do tài chính (FFA)', type: 'percent', percent: 10, vndAmount: 0, color: '#3b82f6' },
+                    { id: '3', name: 'Tiết kiệm dài hạn (LTSS)', type: 'percent', percent: 10, vndAmount: 0, color: '#10b981' },
+                    { id: '4', name: 'Học tập & Phát triển (EDU)', type: 'percent', percent: 10, vndAmount: 0, color: '#f59e0b' },
+                    { id: '5', name: 'Hưởng thụ (PLAY)', type: 'percent', percent: 10, vndAmount: 0, color: '#ec4899' },
+                    { id: '6', name: 'Cho đi (GIVE)', type: 'percent', percent: 5, vndAmount: 0, color: '#8b5cf6' }
                 ]
             }
         ];
@@ -69,7 +73,6 @@
             { id: '3', title: '3. Hưởng thụ không tội lỗi (PLAY)', content: 'Quỹ PLAY giúp tinh thần bạn luôn thoải mái. Hãy tiêu hết tiền quỹ PLAY mỗi tháng hoặc mỗi quý cho các hoạt động nâng cao chất lượng sống.', color: '#ec4899' }
         ];
 
-        // Preset theme colors
         const COLOR_PRESETS = [
             { name: 'Xanh Lam', hex: '#3b82f6' },
             { name: 'Xanh Lục', hex: '#10b981' },
@@ -87,7 +90,6 @@
             GMT_OPTIONS.push({ value: i, label: `GMT ${sign}${i}` });
         }
 
-        // Format VND helper
         const formatVND = (amount) => {
             if (isNaN(amount) || amount === null || amount === undefined) return '0 ₫';
             return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -116,7 +118,6 @@
             return tzDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         };
 
-        // Hàm định dạng số có dấu chấm ngắt nghìn và cho phép số âm
         const formatVNDInput = (val) => {
             if (val === undefined || val === null) return '';
             let strVal = String(val);
@@ -129,7 +130,6 @@
             return isNegative ? '-' + formatted : formatted;
         };
 
-        // Hàm parse chuỗi định dạng về lại số nguyên để tính toán
         const parseFormattedNumber = (val) => {
             if (!val) return 0;
             return Number(String(val).replace(/[^\d-]/g, '')) || 0;
@@ -138,7 +138,22 @@
         function App() {
             const [profiles, setProfiles] = useState(() => {
                 const saved = localStorage.getItem('jff_profiles_v3');
-                return saved ? JSON.parse(saved) : DEFAULT_PROFILES;
+                if (!saved) return DEFAULT_PROFILES;
+                try {
+                    const parsed = JSON.parse(saved);
+                    // Ensure funds have type and vndAmount fields
+                    return parsed.map(p => ({
+                        ...p,
+                        funds: p.funds.map(f => ({
+                            ...f,
+                            type: f.type || 'percent',
+                            vndAmount: f.vndAmount !== undefined ? f.vndAmount : 0,
+                            percent: f.percent !== undefined ? f.percent : 0
+                        }))
+                    }));
+                } catch (e) {
+                    return DEFAULT_PROFILES;
+                }
             });
 
             const [activeProfileId, setActiveProfileId] = useState(() => {
@@ -172,7 +187,6 @@
                 return localStorage.getItem('jff_bg_image_v3') || '';
             });
 
-            // Tự động nhận diện GMT mặc định của trình duyệt hoặc lấy dữ liệu đã lưu
             const [gmtOffset, setGmtOffset] = useState(() => {
                 const saved = localStorage.getItem('jff_gmt_offset_v3');
                 return saved !== null ? Number(saved) : (-(new Date().getTimezoneOffset() / 60));
@@ -198,7 +212,7 @@
             const [newProfileName, setNewProfileName] = useState('');
             const [toast, setToast] = useState(null);
 
-            // Manual Fund Additions
+            // Manual Fund Additions / Target Adjustments
             const [fundAdditions, setFundAdditions] = useState(() => {
                 const saved = localStorage.getItem('jff_fund_additions_v3');
                 return saved ? JSON.parse(saved) : {};
@@ -206,7 +220,11 @@
             const [activeFundForManual, setActiveFundForManual] = useState(null);
             const [manualAmountInput, setManualAmountInput] = useState('');
 
-            // States for Editing Rules & Deleting Profile
+            // Drag and Drop state for Input tab reordering
+            const [draggedFundIndex, setDraggedFundIndex] = useState(null);
+            const [dragOverFundIndex, setDragOverFundIndex] = useState(null);
+
+            // Rules & Profile Editing States
             const [editingRuleId, setEditingRuleId] = useState(null);
             const [tempRule, setTempRule] = useState(null);
             const [profileToDelete, setProfileToDelete] = useState(null);
@@ -222,7 +240,6 @@
                 return formatTZDate(getTZDate(gmt));
             });
 
-            // Expanded history record items
             const [expandedRecordIds, setExpandedRecordIds] = useState({});
 
             // Image Cropper States
@@ -234,7 +251,7 @@
             // Undo Stack
             const [undoStack, setUndoStack] = useState([]);
 
-            // Refs để giữ state mới nhất cho hàm chạy ngầm (tránh stale closures)
+            // State refs for auto-save routine
             const incomeRef = useRef(incomeInput);
             const profileRef = useRef(activeProfileId);
             const profilesRef = useRef(profiles);
@@ -291,7 +308,43 @@
                 localStorage.setItem('jff_gmt_offset_v3', gmtOffset.toString());
             }, [gmtOffset]);
 
-            // Logic Cập nhật Giờ Thực Tế & Tự Động Lưu khi sang ngày mới
+            // Core allocation logic: First deduct fixed VND funds, then divide remaining income among % funds
+            const calculateAllocations = (fundsList, totalIncomeNum, additionsMap) => {
+                const income = totalIncomeNum || 0;
+
+                // 1. Calculate sum of fixed VND funds
+                let totalVndFixed = 0;
+                fundsList.forEach(f => {
+                    if (f.type === 'vnd') {
+                        totalVndFixed += (Number(f.vndAmount) || 0);
+                    }
+                });
+
+                // 2. Compute remaining income for % funds
+                const remainingForPercent = Math.max(0, income - totalVndFixed);
+
+                // 3. Compute base allocation per fund
+                return fundsList.map(fund => {
+                    let baseAllocated = 0;
+                    if (income > 0) {
+                        if (fund.type === 'vnd') {
+                            baseAllocated = Number(fund.vndAmount) || 0;
+                        } else {
+                            baseAllocated = Math.round((remainingForPercent * (Number(fund.percent) || 0)) / 100);
+                        }
+                    }
+                    const extra = additionsMap[fund.id] || 0;
+                    const totalAllocated = baseAllocated + extra;
+
+                    return {
+                        ...fund,
+                        baseAllocated,
+                        extra,
+                        totalAllocated
+                    };
+                });
+            };
+
             useEffect(() => {
                 const checkBootAutoSave = () => {
                     const savedDate = localStorage.getItem('jff_last_date_v3');
@@ -305,17 +358,19 @@
                     const todayStr = formatTZDate(tzDateObj);
 
                     if (savedDate && savedDate !== todayStr && (savedIncome !== 0 || hasAdditions)) {
-                        let totalSaved = savedIncome;
                         const activeProf = profilesRef.current.find(p => p.id === profileRef.current) || DEFAULT_PROFILES[0];
-                        const allocations = activeProf.funds.map(f => {
-                            const base = Math.round((savedIncome * (f.percent || 0)) / 100);
-                            const extra = savedAdditions[f.id] || 0;
-                            totalSaved += extra;
+                        const calculated = calculateAllocations(activeProf.funds, savedIncome, savedAdditions);
+                        
+                        let totalSaved = 0;
+                        const allocations = calculated.map(f => {
+                            totalSaved += f.totalAllocated;
                             return {
                                 fundId: f.id,
                                 fundName: f.name,
+                                type: f.type,
                                 percent: f.percent,
-                                amount: base + extra
+                                vndAmount: f.vndAmount,
+                                amount: f.totalAllocated
                             };
                         });
 
@@ -323,7 +378,7 @@
                             id: Date.now().toString(),
                             date: savedDate,
                             time: "23:59:59",
-                            totalIncome: totalSaved,
+                            totalIncome: savedIncome,
                             profileId: activeProf.id,
                             profileName: activeProf.name,
                             allocations: allocations
@@ -354,25 +409,23 @@
                         const hasAdditions = Object.values(additions).some(v => v !== 0);
 
                         if (income !== 0 || hasAdditions) {
-                            let totalIncomeRecord = income;
                             const activeProf = profilesRef.current.find(p => p.id === profileRef.current) || DEFAULT_PROFILES[0];
-                            const allocations = activeProf.funds.map(f => {
-                                const base = Math.round((income * (f.percent || 0)) / 100);
-                                const extra = additions[f.id] || 0;
-                                totalIncomeRecord += extra;
-                                return {
-                                    fundId: f.id,
-                                    fundName: f.name,
-                                    percent: f.percent,
-                                    amount: base + extra
-                                };
-                            });
+                            const calculated = calculateAllocations(activeProf.funds, income, additions);
+                            
+                            const allocations = calculated.map(f => ({
+                                fundId: f.id,
+                                fundName: f.name,
+                                type: f.type,
+                                percent: f.percent,
+                                vndAmount: f.vndAmount,
+                                amount: f.totalAllocated
+                            }));
 
                             const newRecord = {
                                 id: Date.now().toString(),
                                 date: dateRef.current,
                                 time: "23:59:59",
-                                totalIncome: totalIncomeRecord,
+                                totalIncome: income,
                                 profileId: activeProf.id,
                                 profileName: activeProf.name,
                                 allocations: allocations
@@ -405,10 +458,26 @@
                 return profiles.find(p => p.id === activeProfileId) || profiles[0] || DEFAULT_PROFILES[0];
             }, [profiles, activeProfileId]);
 
-            const totalPercent = useMemo(() => {
-                if (!activeProfile || !activeProfile.funds) return 0;
-                return activeProfile.funds.reduce((sum, f) => sum + (Number(f.percent) || 0), 0);
+            // Totals calculation for percentages and VND fixed funds
+            const configTotals = useMemo(() => {
+                if (!activeProfile || !activeProfile.funds) return { totalPercent: 0, totalVndFixed: 0 };
+                let totalPercent = 0;
+                let totalVndFixed = 0;
+                activeProfile.funds.forEach(f => {
+                    if (f.type === 'vnd') {
+                        totalVndFixed += (Number(f.vndAmount) || 0);
+                    } else {
+                        totalPercent += (Number(f.percent) || 0);
+                    }
+                });
+                return { totalPercent, totalVndFixed };
             }, [activeProfile]);
+
+            // Calculated current allocations array for active profile funds
+            const currentAllocations = useMemo(() => {
+                const incomeNum = parseFormattedNumber(incomeInput);
+                return calculateAllocations(activeProfile.funds, incomeNum, fundAdditions);
+            }, [activeProfile, incomeInput, fundAdditions]);
 
             // Filtered history by selected date range
             const filteredHistory = useMemo(() => {
@@ -422,8 +491,6 @@
             // Aggregated sum for date range
             const historyTotals = useMemo(() => {
                 let grandTotal = 0;
-                
-                // Khởi tạo danh sách các quỹ theo đúng profile đang active (để đảm bảo chỉ hiển thị đúng số quỹ hiện tại)
                 const fundTotalsMap = {};
                 if (activeProfile && activeProfile.funds) {
                     activeProfile.funds.forEach(f => {
@@ -446,13 +513,10 @@
                             let amt = Number(alloc.amount) || 0;
                             let matched = false;
 
-                            // 1. Cố gắng map theo ID quỹ
                             if (fundTotalsMap[alloc.fundId]) {
                                 fundTotalsMap[alloc.fundId].amount += amt;
                                 matched = true;
-                            } 
-                            // 2. Cố gắng map theo tên quỹ (nếu ID bị đổi do xóa/tạo lại)
-                            else {
+                            } else {
                                 const matchByName = activeProfile?.funds?.find(f => f.name === alloc.fundName);
                                 if (matchByName && fundTotalsMap[matchByName.id]) {
                                     fundTotalsMap[matchByName.id].amount += amt;
@@ -460,7 +524,6 @@
                                 }
                             }
 
-                            // 3. Fallback: Map theo thứ tự (index) nếu người dùng xóa quỹ cũ và tạo lại quỹ mới thay thế
                             if (!matched && activeProfile?.funds && activeProfile.funds[index]) {
                                 const fallbackFund = activeProfile.funds[index];
                                 if (fundTotalsMap[fallbackFund.id]) {
@@ -469,7 +532,6 @@
                                 }
                             }
 
-                            // 4. Nếu vẫn không map được, đưa vào mục "Khác" để không làm sai lệch tổng số
                             if (!matched) {
                                 deletedFundsAmount += amt;
                             }
@@ -519,7 +581,7 @@
                             activeProfileId: currentActiveId
                         }
                     ];
-                    return newStack.slice(-20); // Keep last 20 steps
+                    return newStack.slice(-20);
                 });
             };
 
@@ -549,7 +611,7 @@
                     id: 'profile-' + Date.now(),
                     name: newProfileName.trim(),
                     funds: [
-                        { id: Date.now().toString(), name: 'Quỹ Chi Tiêu Chính', percent: 100, color: themeColor }
+                        { id: Date.now().toString(), name: 'Quỹ Chi Tiêu Chính', type: 'percent', percent: 100, vndAmount: 0, color: themeColor }
                     ]
                 };
                 setProfiles([...profiles, newProf]);
@@ -574,7 +636,9 @@
                 const newFund = {
                     id: Date.now().toString(),
                     name: `Quỹ mới ${activeProfile.funds.length + 1}`,
+                    type: 'percent',
                     percent: 0,
+                    vndAmount: 0,
                     color: COLOR_PRESETS[activeProfile.funds.length % COLOR_PRESETS.length].hex
                 };
                 const updatedFunds = [...activeProfile.funds, newFund];
@@ -591,6 +655,39 @@
                 const updatedFunds = activeProfile.funds.filter(f => f.id !== fundId);
                 setProfiles(profiles.map(p => p.id === activeProfile.id ? { ...p, funds: updatedFunds } : p));
                 showToast('Đã xóa ô quỹ');
+            };
+
+            const handleMoveFund = (fromIndex, toIndex) => {
+                if (toIndex < 0 || toIndex >= activeProfile.funds.length) return;
+                saveStateForUndo(profiles, historyData, activeProfileId);
+                const updatedFunds = [...activeProfile.funds];
+                const [movedItem] = updatedFunds.splice(fromIndex, 1);
+                updatedFunds.splice(toIndex, 0, movedItem);
+                setProfiles(profiles.map(p => p.id === activeProfile.id ? { ...p, funds: updatedFunds } : p));
+                showToast('Đã thay đổi thứ tự các quỹ');
+            };
+
+            const handleDragStart = (e, index) => {
+                setDraggedFundIndex(index);
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/html", e.target.parentNode);
+            };
+
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dragOverFundIndex !== index) {
+                    setDragOverFundIndex(index);
+                }
+            };
+
+            const handleDrop = (e, index) => {
+                e.preventDefault();
+                if (draggedFundIndex !== null && draggedFundIndex !== index) {
+                    handleMoveFund(draggedFundIndex, index);
+                }
+                setDraggedFundIndex(null);
+                setDragOverFundIndex(null);
             };
 
             const handleImageSelect = (e) => {
@@ -793,7 +890,7 @@
                                             inputMode="text"
                                             value={incomeInput}
                                             onChange={(e) => setIncomeInput(formatVNDInput(e.target.value))}
-                                            placeholder=""
+                                            placeholder="0"
                                             className="w-full bg-slate-900/90 text-white font-extrabold text-lg sm:text-2xl px-4 py-3.5 rounded-2xl border border-white/15 focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-500"
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
@@ -802,7 +899,13 @@
                                     </div>
 
                                     {(incomeInput || Object.values(fundAdditions).some(v => v !== 0)) && (
-                                        <div className="flex justify-end pt-1">
+                                        <div className="flex justify-between items-center pt-1">
+                                            <span className="text-[11px] text-slate-400 font-medium">
+                                                Thu nhập: <strong className="text-slate-200">{incomeInput ? incomeInput : '0'} ₫</strong>
+                                                {configTotals.totalVndFixed > 0 && (
+                                                    <span className="ml-2 text-blue-400">(Trừ {formatVND(configTotals.totalVndFixed)} cố định)</span>
+                                                )}
+                                            </span>
                                             <button
                                                 onClick={() => { setIncomeInput(''); setFundAdditions({}); }}
                                                 className="py-1.5 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-xs font-bold transition-all"
@@ -821,53 +924,106 @@
 
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center px-1">
-                                        <h3 className="font-extrabold text-xs uppercase text-slate-300 tracking-wider">
-                                            Phân Bổ Thu Nhập
+                                        <h3 className="font-extrabold text-xs uppercase text-slate-300 tracking-wider flex items-center gap-2">
+                                            Phân Bổ Thu Nhập 
+                                            <span className="text-[10px] text-slate-400 font-normal normal-case">(Kéo thả hoặc bấm ▲▼ để đổi thứ tự)</span>
                                         </h3>
-                                        <span className={`text-xs font-bold ${totalPercent === 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                            Tổng: {totalPercent}%
-                                        </span>
+                                        <div className="flex items-center space-x-2 text-xs font-bold">
+                                            {configTotals.totalVndFixed > 0 && (
+                                                <span className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                                    Cố định: {formatVND(configTotals.totalVndFixed)}
+                                                </span>
+                                            )}
+                                            <span className={`${configTotals.totalPercent === 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                % Còn lại: {configTotals.totalPercent}%
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                                        {activeProfile.funds.map((fund) => {
-                                            const income = parseFormattedNumber(incomeInput);
-                                            const baseAllocated = Math.round((income * (fund.percent || 0)) / 100);
-                                            const manualAdd = fundAdditions[fund.id] || 0;
-                                            const totalAllocated = baseAllocated + manualAdd;
+                                        {currentAllocations.map((fundAlloc, index) => {
+                                            const isDragging = draggedFundIndex === index;
+                                            const isDragOver = dragOverFundIndex === index;
 
                                             return (
                                                 <div 
-                                                    key={fund.id} 
-                                                    onClick={() => {
-                                                        setActiveFundForManual(fund);
-                                                        setManualAmountInput(manualAdd !== 0 ? formatVNDInput(manualAdd.toString()) : '');
-                                                    }}
-                                                    className="glass-card rounded-2xl p-3.5 transition-all hover:border-white/40 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 flex flex-col justify-center gap-1.5 group relative"
-                                                    style={{ borderLeft: `4px solid ${fund.color || themeColor}` }}
+                                                    key={fundAlloc.id}
+                                                    draggable={true}
+                                                    onDragStart={(e) => handleDragStart(e, index)}
+                                                    onDragOver={(e) => handleDragOver(e, index)}
+                                                    onDrop={(e) => handleDrop(e, index)}
+                                                    className={`glass-card rounded-2xl p-3.5 transition-all cursor-pointer hover:shadow-lg relative group ${
+                                                        isDragging ? 'drag-ghost border-dashed border-blue-400' : ''
+                                                    } ${isDragOver ? 'ring-2 ring-blue-400 bg-blue-900/30' : ''}`}
+                                                    style={{ borderLeft: `5px solid ${fundAlloc.color || themeColor}` }}
                                                 >
-                                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {/* Drag handle & Move up/down buttons */}
+                                                        <div className="flex flex-col items-center justify-center pr-2 border-r border-white/10 select-none">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleMoveFund(index, index - 1); }}
+                                                                disabled={index === 0}
+                                                                className="text-slate-500 hover:text-white disabled:opacity-20 p-0.5"
+                                                                title="Di chuyển lên"
+                                                            >
+                                                                ▲
+                                                            </button>
+                                                            <div className="text-slate-500 cursor-grab active:cursor-grabbing p-0.5" title="Giữ kéo thả">
+                                                                ⋮⋮
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleMoveFund(index, index + 1); }}
+                                                                disabled={index === currentAllocations.length - 1}
+                                                                className="text-slate-500 hover:text-white disabled:opacity-20 p-0.5"
+                                                                title="Di chuyển xuống"
+                                                            >
+                                                                ▼
+                                                            </button>
+                                                        </div>
 
-                                                    <div className="flex justify-between items-center gap-2 pr-4">
-                                                        <h4 className="font-extrabold text-sm text-white truncate">{fund.name}</h4>
-                                                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/10 text-slate-200 shrink-0">
-                                                            {fund.percent}%
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="flex justify-between items-end mt-1">
-                                                        <span className="text-[10px] text-slate-400 font-medium opacity-60 group-hover:opacity-100 transition-opacity">Nhấn để nhập thủ công</span>
-                                                        <div className="text-right">
-                                                            {manualAdd !== 0 && (
-                                                                <span className={`text-[10px] font-bold block mb-0.5 ${manualAdd > 0 ? 'text-amber-400' : 'text-red-400'}`}>
-                                                                    {manualAdd > 0 ? '+' : ''}{formatVND(manualAdd)} (thủ công)
+                                                        {/* Main Fund Card Content */}
+                                                        <div 
+                                                            className="flex-1 space-y-1.5"
+                                                            onClick={() => {
+                                                                setActiveFundForManual(fundAlloc);
+                                                                // Pre-fill input with target total allocated amount so editing is intuitive
+                                                                setManualAmountInput(formatVNDInput(fundAlloc.totalAllocated.toString()));
+                                                            }}
+                                                        >
+                                                            <div className="flex justify-between items-center gap-2">
+                                                                <h4 className="font-extrabold text-sm text-white truncate flex items-center gap-1.5">
+                                                                    <span>{fundAlloc.name}</span>
+                                                                    {fundAlloc.type === 'vnd' ? (
+                                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono font-bold border border-blue-500/30">
+                                                                            Cố định
+                                                                        </span>
+                                                                    ) : null}
+                                                                </h4>
+                                                                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/10 text-slate-200 shrink-0">
+                                                                    {fundAlloc.type === 'vnd' 
+                                                                        ? formatVND(fundAlloc.vndAmount) 
+                                                                        : `${fundAlloc.percent}%`
+                                                                    }
                                                                 </span>
-                                                            )}
-                                                            <span className="text-base font-black text-emerald-400">
-                                                                {formatVND(totalAllocated)}
-                                                            </span>
+                                                            </div>
+
+                                                            <div className="flex justify-between items-end">
+                                                                <span className="text-[10px] text-slate-400 font-medium opacity-60 group-hover:opacity-100 transition-opacity">
+                                                                    Nhấn để chỉnh sửa số tiền chốt
+                                                                </span>
+                                                                <div className="text-right">
+                                                                    {fundAlloc.extra !== 0 && (
+                                                                        <span className={`text-[10px] font-bold block mb-0.5 ${fundAlloc.extra > 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                                                                            ({fundAlloc.extra > 0 ? '+' : ''}{formatVND(fundAlloc.extra)} điều chỉnh)
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-base font-black text-emerald-400">
+                                                                        {formatVND(fundAlloc.totalAllocated)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -884,27 +1040,44 @@
                                 <div className="glass-card rounded-3xl p-5 shadow-2xl space-y-4">
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                                         <div>
-                                            <h2 className="font-extrabold text-base text-white">Cấu Hình Ô Quỹ & Tỷ Lệ %</h2>
-                                            <p className="text-xs text-slate-400">Tùy chỉnh tên và số % của từng ô quỹ</p>
+                                            <h2 className="font-extrabold text-base text-white">Cấu Hình Ô Quỹ & Đơn Vị (VND / %)</h2>
+                                            <p className="text-xs text-slate-400">Thiết lập quỹ cố định theo số tiền VND hoặc chia theo tỷ lệ phần trăm</p>
                                         </div>
-                                        <div className={`px-3 py-1 rounded-xl font-bold text-xs border ${
-                                            totalPercent === 100 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                        }`}>
-                                            Tổng tỷ lệ: {totalPercent} / 100%
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {configTotals.totalVndFixed > 0 && (
+                                                <div className="px-3 py-1 rounded-xl font-bold text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                                    Tổng VND cố định: {formatVND(configTotals.totalVndFixed)}
+                                                </div>
+                                            )}
+                                            <div className={`px-3 py-1 rounded-xl font-bold text-xs border ${
+                                                configTotals.totalPercent === 100 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                            }`}>
+                                                % Còn lại: {configTotals.totalPercent} / 100%
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {totalPercent !== 100 && (
+                                    <div className="bg-slate-900/60 border border-white/10 p-3.5 rounded-2xl text-xs text-slate-300 space-y-1">
+                                        <p className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">💡 Logic Chia Thu Nhập Mới:</p>
+                                        <p className="leading-relaxed">
+                                            <strong>Bước 1:</strong> Trừ trực tiếp số tiền của các quỹ đơn vị <span className="text-blue-300 font-bold">VND</span>.
+                                            <br />
+                                            <strong>Bước 2:</strong> Số tiền thu nhập còn lại sẽ được chia đều cho các quỹ có đơn vị <span className="text-emerald-300 font-bold">% Phần Trăm</span>.
+                                        </p>
+                                    </div>
+
+                                    {configTotals.totalPercent !== 100 && (
                                         <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl text-xs text-amber-300 font-medium">
-                                            Cảnh báo: Tổng phần trăm hiện tại là <strong>{totalPercent}%</strong>. Hãy điều chỉnh để tổng vừa đủ <strong>100%</strong> nhé!
+                                            Cảnh báo: Tổng phần trăm các quỹ còn lại là <strong>{configTotals.totalPercent}%</strong>. Hãy điều chỉnh để tổng vừa đủ <strong>100%</strong> nhé!
                                         </div>
                                     )}
 
                                     <div className="space-y-3 pt-2">
                                         {activeProfile.funds.map((fund, index) => (
-                                            <div key={fund.id} className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10">
+                                            <div key={fund.id} className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-3">
                                                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                                                    <div className="sm:col-span-6">
+                                                    {/* Name input */}
+                                                    <div className="sm:col-span-5">
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tên ô quỹ #{index + 1}</label>
                                                         <input
                                                             type="text"
@@ -913,28 +1086,69 @@
                                                             className="w-full bg-slate-950 text-white font-bold text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
                                                         />
                                                     </div>
+
+                                                    {/* Unit Type Toggle (% vs VND) */}
                                                     <div className="sm:col-span-3">
-                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tỷ lệ (%)</label>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            max="100"
-                                                            value={fund.percent}
-                                                            onChange={(e) => handleUpdateFund(fund.id, 'percent', Number(e.target.value))}
-                                                            className="w-full bg-slate-950 text-white font-black text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                                        />
+                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Đơn vị tính</label>
+                                                        <div className="flex bg-slate-950 p-1 rounded-xl border border-white/10">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleUpdateFund(fund.id, 'type', 'percent')}
+                                                                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                                                                    fund.type !== 'vnd' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                % Phần Trăm
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleUpdateFund(fund.id, 'type', 'vnd')}
+                                                                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                                                                    fund.type === 'vnd' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                ₫ VND
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <div className="sm:col-span-3 flex items-center space-x-2 pt-2 sm:pt-4">
+
+                                                    {/* Amount or Percent Value input */}
+                                                    <div className="sm:col-span-2">
+                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                                                            {fund.type === 'vnd' ? 'Số tiền (VND)' : 'Tỷ lệ (%)'}
+                                                        </label>
+                                                        {fund.type === 'vnd' ? (
+                                                            <input
+                                                                type="text"
+                                                                value={formatVNDInput(fund.vndAmount)}
+                                                                onChange={(e) => handleUpdateFund(fund.id, 'vndAmount', parseFormattedNumber(e.target.value))}
+                                                                placeholder="0"
+                                                                className="w-full bg-slate-950 text-emerald-400 font-extrabold text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                                            />
+                                                        ) : (
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="100"
+                                                                value={fund.percent}
+                                                                onChange={(e) => handleUpdateFund(fund.id, 'percent', Number(e.target.value))}
+                                                                className="w-full bg-slate-950 text-blue-400 font-extrabold text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                                            />
+                                                        )}
+                                                    </div>
+
+                                                    {/* Color & Action Buttons */}
+                                                    <div className="sm:col-span-2 flex items-center space-x-2 pt-1 sm:pt-4">
                                                         <input
                                                             type="color"
                                                             value={fund.color || themeColor}
                                                             onChange={(e) => handleUpdateFund(fund.id, 'color', e.target.value)}
-                                                            className="w-9 h-9 rounded-xl bg-slate-950 border border-white/10 cursor-pointer p-0.5"
+                                                            className="w-9 h-9 rounded-xl bg-slate-950 border border-white/10 cursor-pointer p-0.5 shrink-0"
                                                             title="Đổi màu viền ô quỹ"
                                                         />
                                                         <button
                                                             onClick={() => handleDeleteFundFromProfile(fund.id)}
-                                                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all text-xs font-bold"
+                                                            className="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all text-xs font-bold"
                                                             title="Xóa ô quỹ này"
                                                         >
                                                             Xóa
@@ -1008,7 +1222,6 @@
                                     </div>
                                 </div>
 
-                                {}
                                 {filteredHistory.length > 0 && (
                                     <div className="glass-card rounded-3xl p-5 shadow-xl space-y-4 border border-blue-500/20 bg-blue-950/20">
                                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-3 gap-2">
@@ -1047,7 +1260,6 @@
                                     </div>
                                 )}
 
-                                {}
                                 {historyData.length === 0 ? (
                                     <div className="glass-card rounded-3xl p-12 text-center text-slate-400 space-y-3">
                                         <p className="font-bold text-sm">Chưa có lịch sử phân bổ nào được lưu</p>
@@ -1099,12 +1311,13 @@
                                                         </div>
                                                     </div>
 
-                                                    {/* Dropdown specific allocations list */}
                                                     {isExpanded && (
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-3 border-t border-white/10 animate-fadeIn">
                                                             {record.allocations.map((alloc, idx) => (
                                                                 <div key={idx} className="bg-slate-900/80 p-2.5 rounded-xl border border-white/5 space-y-0.5">
-                                                                    <span className="text-[10px] font-bold text-slate-400 truncate block">{alloc.fundName} ({alloc.percent}%)</span>
+                                                                    <span className="text-[10px] font-bold text-slate-400 truncate block">
+                                                                        {alloc.fundName} {alloc.type === 'vnd' ? '(VND)' : `(${alloc.percent}%)`}
+                                                                    </span>
                                                                     <span className="text-xs font-black text-white block">{formatVND(alloc.amount)}</span>
                                                                 </div>
                                                             ))}
@@ -1245,44 +1458,81 @@
                         </div>
                     )}
 
-                    {/* MODAL: NHẬP QUỸ THỦ CÔNG */}
+                    {/* MODAL: NHẬP SỐ TIỀN CHỐT THỦ CÔNG CHO QUỸ */}
                     {activeFundForManual && (
                         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
                             <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-4">
                                 <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                                    <h3 className="font-extrabold text-white text-base">Nhập Riêng: {activeFundForManual.name}</h3>
+                                    <div>
+                                        <h3 className="font-extrabold text-white text-base">Chỉnh Sửa Số Tiền Quỹ</h3>
+                                        <p className="text-[11px] text-slate-400 font-medium">{activeFundForManual.name}</p>
+                                    </div>
                                     <button onClick={() => setActiveFundForManual(null)} className="text-slate-400 hover:text-white p-1 font-bold">✕</button>
                                 </div>
+
+                                <div className="bg-slate-950/60 p-3 rounded-xl border border-white/5 space-y-1 text-xs">
+                                    <div className="flex justify-between text-slate-400">
+                                        <span>Tự động tính từ thu nhập:</span>
+                                        <span className="font-bold text-slate-200">{formatVND(activeFundForManual.baseAllocated)}</span>
+                                    </div>
+                                    {activeFundForManual.type === 'vnd' ? (
+                                        <p className="text-[10px] text-blue-400">Đơn vị: Quỹ cố định {formatVND(activeFundForManual.vndAmount)}</p>
+                                    ) : (
+                                        <p className="text-[10px] text-blue-400">Đơn vị: Tỷ lệ {activeFundForManual.percent}%</p>
+                                    )}
+                                </div>
+
                                 <div className="space-y-2">
-                                    <label className="text-[11px] font-bold text-slate-400 uppercase">Số tiền cộng/trừ (VND)</label>
+                                    <label className="text-[11px] font-bold text-slate-300 uppercase block">
+                                        Số tiền thực nhận (Chốt cho quỹ này)
+                                    </label>
                                     <input
                                         type="text"
                                         inputMode="text"
                                         value={manualAmountInput}
                                         onChange={(e) => setManualAmountInput(formatVNDInput(e.target.value))}
-                                        className="w-full bg-slate-950 text-white font-bold text-lg px-4 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
+                                        placeholder="0"
+                                        className="w-full bg-slate-950 text-emerald-400 font-black text-xl px-4 py-3 rounded-xl border border-white/15 focus:outline-none focus:border-blue-500"
                                         autoFocus
                                     />
-                                    <p className="text-[10px] text-slate-500">Ghi số âm (VD: -50.000) nếu bạn chi tiêu lẹm vào quỹ này.</p>
+                                    <div className="flex justify-between items-center text-[10px] pt-1">
+                                        <span className="text-slate-400">
+                                            Chênh lệch: <strong className={
+                                                (parseFormattedNumber(manualAmountInput) - activeFundForManual.baseAllocated) >= 0 ? 'text-amber-400' : 'text-red-400'
+                                            }>
+                                                {formatVND(parseFormattedNumber(manualAmountInput) - activeFundForManual.baseAllocated)}
+                                            </strong>
+                                        </span>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setManualAmountInput(formatVNDInput(activeFundForManual.baseAllocated.toString()))} 
+                                            className="text-blue-400 hover:underline font-bold"
+                                        >
+                                            Đặt về tự động
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex justify-end">
-                                    <button onClick={() => setManualAmountInput('')} className="py-1.5 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-[10px] font-bold transition-all">Về 0</button>
-                                </div>
+
                                 <div className="flex space-x-3 pt-2">
                                     <button onClick={() => setActiveFundForManual(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Hủy</button>
                                     <button 
                                         onClick={() => {
-                                            const amt = parseFormattedNumber(manualAmountInput);
+                                            const targetTotal = parseFormattedNumber(manualAmountInput);
+                                            // The required delta/addition relative to calculated base allocation
+                                            const newAddition = targetTotal - activeFundForManual.baseAllocated;
+                                            
                                             setFundAdditions(prev => ({
                                                 ...prev,
-                                                [activeFundForManual.id]: amt
+                                                [activeFundForManual.id]: newAddition
                                             }));
                                             setActiveFundForManual(null);
-                                            showToast(`Đã cập nhật số tiền riêng cho ${activeFundForManual.name}`);
+                                            showToast(`Đã chốt ${formatVND(targetTotal)} cho ${activeFundForManual.name}`);
                                         }} 
-                                        className="flex-1 py-2.5 rounded-xl text-white font-extrabold text-xs" 
+                                        className="flex-1 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-lg" 
                                         style={{ backgroundColor: activeFundForManual.color || themeColor }}
-                                    >Lưu Số Tiền</button>
+                                    >
+                                        Lưu Số Tiền
+                                    </button>
                                 </div>
                             </div>
                         </div>
