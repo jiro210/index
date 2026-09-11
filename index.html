@@ -84,12 +84,11 @@
     </style>
 </head>
 <body class="selection:bg-cyan-500 selection:text-white">
-    <!-- Overlay filter to keep text readable over background images -->
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-[2px] pointer-events-none z-0"></div>
+    <div class="fixed inset-0 bg-slate-950/70 backdrop-blur-[2px] pointer-events-none z-0"></div>
     <div id="root" class="relative z-10"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
         // Timezone presets list
         const TIMEZONE_OPTIONS = [
@@ -205,7 +204,7 @@
             // Navigation tab: 'input' | 'config' | 'history'
             const [activeTab, setActiveTab] = useState('input');
 
-            // Workspaces & Active Workspace state
+            // Workspaces & Active Workspace state with local persistence
             const [workspaces, setWorkspaces] = useState(() => {
                 const saved = localStorage.getItem('jff_workspaces_v6');
                 return saved ? JSON.parse(saved) : DEFAULT_WORKSPACES;
@@ -232,55 +231,67 @@
             // Drawer Sidebar Open state
             const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+            // Image Cropper & Adjuster State
+            const [imageToAdjust, setImageToAdjust] = useState(null);
+            const [zoom, setZoom] = useState(1);
+            const [position, setPosition] = useState({ x: 0, y: 0 });
+            const [isDragging, setIsDragging] = useState(false);
+            const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+            const [imgNaturalSize, setImgNaturalSize] = useState({ w: 0, h: 0 });
+            const cropContainerRef = useRef(null);
+
             // Workspace funds & history shorthands
             const funds = currentWs.funds || DEFAULT_FUNDS;
             const history = currentWs.history || [];
             const currentTimezone = currentWs.timezone || 'Asia/Ho_Chi_Minh';
             const currentBgImage = currentWs.bgImage || '';
 
-            // Update body background image dynamically
-            useEffect(() => {
-                if (currentBgImage) {
-                    document.body.style.backgroundImage = `url("${currentBgImage}")`;
-                } else {
-                    document.body.style.backgroundImage = 'none';
-                    document.body.style.backgroundColor = '#0b0f19';
-                }
-            }, [currentBgImage]);
+            // Draft Input & Overrides with persistent local storage
+            const [totalIncomeInput, setTotalIncomeInput] = useState(() => {
+                return localStorage.getItem('jff_draft_income_v6') || '';
+            });
 
-            // Save Workspaces to LocalStorage
-            useEffect(() => {
-                localStorage.setItem('jff_workspaces_v6', JSON.stringify(workspaces));
-            }, [workspaces]);
-
-            useEffect(() => {
-                localStorage.setItem('jff_active_ws_v6', activeWsId);
-            }, [activeWsId]);
-
-            // Income Input & Overrides State
-            const [totalIncomeInput, setTotalIncomeInput] = useState('');
             const [incomeNote, setIncomeNote] = useState('');
-            const [overrides, setOverrides] = useState({}); // { fundId: manualAmount }
 
-            // Undo Stack
+            const [overrides, setOverrides] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('jff_draft_overrides_v6');
+                    return saved ? JSON.parse(saved) : {};
+                } catch (e) {
+                    return {};
+                }
+            });
+
+            // Save draft input & overrides to local storage whenever changed
+            useEffect(() => {
+                localStorage.setItem('jff_draft_income_v6', totalIncomeInput);
+            }, [totalIncomeInput]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_draft_overrides_v6', JSON.stringify(overrides));
+            }, [overrides]);
+
+            // Check new day reset logic
+            useEffect(() => {
+                const todayStr = getDateStrInTZ(currentTimezone, nowDate);
+                const lastActiveDate = localStorage.getItem('jff_last_date_v6');
+
+                if (lastActiveDate && lastActiveDate !== todayStr) {
+                    setTotalIncomeInput('');
+                    setOverrides({});
+                    localStorage.setItem('jff_draft_income_v6', '');
+                    localStorage.setItem('jff_draft_overrides_v6', '{}');
+                    localStorage.setItem('jff_last_date_v6', todayStr);
+                } else if (!lastActiveDate) {
+                    localStorage.setItem('jff_last_date_v6', todayStr);
+                }
+            }, [nowDate, currentTimezone]);
+
             const [undoStack, setUndoStack] = useState([]);
+            const [redoStack, setRedoStack] = useState([]);
 
-            // History Date Range Filters (Defaults to 1st of month to Today in TZ)
-            const [startDate, setStartDate] = useState(() => getFirstDayOfMonthStrInTZ(currentTimezone));
-            const [endDate, setEndDate] = useState(() => getDateStrInTZ(currentTimezone));
-            const [historySearch, setHistorySearch] = useState('');
-            const [expandedHistoryId, setExpandedHistoryId] = useState(null);
-
-            // Toast Message Notification
-            const [toastMessage, setToastMessage] = useState(null);
-
-            const showToast = (msg, type = 'info') => {
-                setToastMessage({ msg, type });
-                setTimeout(() => setToastMessage(null), 2500);
-            };
-
-            const saveSnapshotForUndo = (description) => {
-                const snapshot = {
+            const getCurrentStateSnapshot = useCallback((description) => {
+                return {
                     workspaces: JSON.parse(JSON.stringify(workspaces)),
                     activeWsId,
                     overrides: { ...overrides },
@@ -288,13 +299,21 @@
                     incomeNote,
                     description
                 };
-                setUndoStack(prev => [...prev.slice(-10), snapshot]);
+            }, [workspaces, activeWsId, overrides, totalIncomeInput, incomeNote]);
+
+            const saveSnapshotForUndo = (description) => {
+                const snapshot = getCurrentStateSnapshot(description);
+                setUndoStack(prev => [...prev.slice(-9), snapshot]);
+                setRedoStack([]);
             };
 
             const handleUndo = () => {
                 if (undoStack.length === 0) return;
                 const lastState = undoStack[undoStack.length - 1];
+                const currentState = getCurrentStateSnapshot('Trước hoàn tác');
+
                 setUndoStack(prev => prev.slice(0, -1));
+                setRedoStack(prev => [...prev.slice(-9), currentState]);
 
                 setWorkspaces(lastState.workspaces);
                 setActiveWsId(lastState.activeWsId);
@@ -304,7 +323,177 @@
                 showToast(`Đã hoàn tác: ${lastState.description}`, 'success');
             };
 
-            // Update current workspace data safely
+            const handleRedo = () => {
+                if (redoStack.length === 0) return;
+                const nextState = redoStack[redoStack.length - 1];
+                const currentState = getCurrentStateSnapshot('Trước khôi phục');
+
+                setRedoStack(prev => prev.slice(0, -1));
+                setUndoStack(prev => [...prev.slice(-9), currentState]);
+
+                setWorkspaces(nextState.workspaces);
+                setActiveWsId(nextState.activeWsId);
+                setOverrides(nextState.overrides);
+                setTotalIncomeInput(nextState.totalIncomeInput);
+                setIncomeNote(nextState.incomeNote || '');
+                showToast(`Đã khôi phục: ${nextState.description}`, 'success');
+            };
+
+            useEffect(() => {
+                if (imageToAdjust) {
+                    const img = new Image();
+                    img.onload = () => {
+                        setImgNaturalSize({ w: img.width, h: img.height });
+                    };
+                    img.src = imageToAdjust;
+                }
+            }, [imageToAdjust]);
+
+            const handleFileSelect = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+
+                if (!file.type.startsWith('image/')) {
+                    showToast('Vui lòng chọn file hình ảnh hợp lệ!', 'warning');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const dataUrl = event.target.result;
+                    setZoom(1);
+                    setPosition({ x: 0, y: 0 });
+                    setImageToAdjust(dataUrl);
+                    setIsDrawerOpen(false);
+                    e.target.value = '';
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const handleMouseDown = (e) => {
+                e.preventDefault();
+                setIsDragging(true);
+                setDragStart({
+                    x: e.clientX - position.x,
+                    y: e.clientY - position.y
+                });
+            };
+
+            const handleMouseMove = (e) => {
+                if (!isDragging) return;
+                setPosition({
+                    x: e.clientX - dragStart.x,
+                    y: e.clientY - dragStart.y
+                });
+            };
+
+            const handleMouseUp = () => {
+                setIsDragging(false);
+            };
+
+            const handleTouchStart = (e) => {
+                if (e.touches.length === 1) {
+                    setIsDragging(true);
+                    setDragStart({
+                        x: e.touches[0].clientX - position.x,
+                        y: e.touches[0].clientY - position.y
+                    });
+                }
+            };
+
+            const handleTouchMove = (e) => {
+                if (isDragging && e.touches.length === 1) {
+                    setPosition({
+                        x: e.touches[0].clientX - dragStart.x,
+                        y: e.touches[0].clientY - dragStart.y
+                    });
+                }
+            };
+
+            const handleTouchEnd = () => {
+                setIsDragging(false);
+            };
+
+            const applyCroppedImage = () => {
+                if (!imageToAdjust) return;
+                
+                saveSnapshotForUndo('Thay đổi hình nền từ thư viện');
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    const targetWidth = 1080;
+                    const targetHeight = 1920;
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+
+                    ctx.fillStyle = '#0b0f19';
+                    ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+                    const containerW = cropContainerRef.current ? cropContainerRef.current.clientWidth : 280;
+                    const containerH = cropContainerRef.current ? cropContainerRef.current.clientHeight : 460;
+
+                    const scaleRatio = targetWidth / containerW;
+
+                    const imgAspect = img.width / img.height;
+                    const containerAspect = containerW / containerH;
+                    let drawW, drawH;
+                    if (imgAspect > containerAspect) {
+                        drawH = containerH;
+                        drawW = containerH * imgAspect;
+                    } else {
+                        drawW = containerW;
+                        drawH = containerW / imgAspect;
+                    }
+
+                    const drawW_target = drawW * scaleRatio;
+                    const drawH_target = drawH * scaleRatio;
+
+                    ctx.save();
+                    ctx.translate(targetWidth / 2 + position.x * scaleRatio, targetHeight / 2 + position.y * scaleRatio);
+                    ctx.scale(zoom, zoom);
+                    ctx.drawImage(img, -drawW_target / 2, -drawH_target / 2, drawW_target, drawH_target);
+                    ctx.restore();
+
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+                    setBgImage(dataUrl);
+                    setImageToAdjust(null);
+                    showToast('Đã áp dụng hình nền mới thành công!', 'success');
+                };
+                img.src = imageToAdjust;
+            };
+
+            useEffect(() => {
+                if (currentBgImage) {
+                    document.body.style.backgroundImage = `url("${currentBgImage}")`;
+                } else {
+                    document.body.style.backgroundImage = 'none';
+                    document.body.style.backgroundColor = '#0b0f19';
+                }
+            }, [currentBgImage]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_workspaces_v6', JSON.stringify(workspaces));
+            }, [workspaces]);
+
+            useEffect(() => {
+                localStorage.setItem('jff_active_ws_v6', activeWsId);
+            }, [activeWsId]);
+
+            const [startDate, setStartDate] = useState(() => getFirstDayOfMonthStrInTZ(currentTimezone));
+            const [endDate, setEndDate] = useState(() => getDateStrInTZ(currentTimezone));
+            const [historySearch, setHistorySearch] = useState('');
+            const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+
+            const [toastMessage, setToastMessage] = useState(null);
+
+            const showToast = (msg, type = 'info') => {
+                setToastMessage({ msg, type });
+                setTimeout(() => setToastMessage(null), 2500);
+            };
+
             const updateCurrentWorkspaceData = (updaterFn) => {
                 setWorkspaces(prev => prev.map(ws => {
                     if (ws.id === activeWsId) {
@@ -379,7 +568,6 @@
                 return funds.reduce((sum, f) => f.type === 'percent' ? sum + (Number(f.percent) || 0) : sum, 0);
             }, [funds]);
 
-            // Main Allocation Calculation
             const calculatedAllocations = useMemo(() => {
                 const income = parsedTotalIncome;
 
@@ -414,7 +602,6 @@
                 });
             }, [funds, parsedTotalIncome, overrides]);
 
-            // Fund override modal state
             const [editingFundOverride, setEditingFundOverride] = useState(null);
             const [overrideInputValue, setOverrideInputValue] = useState('');
 
@@ -445,7 +632,6 @@
                 showToast(`Đã đặt lại tự động cho ${fundName}`);
             };
 
-            // Copy Bank Info
             const handleCopyBankInfo = (info, fundName) => {
                 if (!info) return;
                 if (copyToClipboard(info)) {
@@ -455,7 +641,6 @@
                 }
             };
 
-            // Record Income
             const handleRecordAllocation = () => {
                 if (parsedTotalIncome <= 0) {
                     showToast('Vui lòng nhập Tổng Thu Nhập > 0', 'warning');
@@ -482,8 +667,6 @@
                 };
 
                 setHistory(prev => [record, ...prev]);
-                setOverrides({});
-                setIncomeNote('');
                 showToast('Đã lưu lịch sử phân bổ thành công!', 'success');
             };
 
@@ -493,33 +676,88 @@
                 showToast('Đã xóa 1 bản ghi lịch sử');
             };
 
-            // Export / Import Modal State
             const [showBackupModal, setShowBackupModal] = useState(false);
             const [jsonBackupText, setJsonBackupText] = useState('');
 
-            const handleExportData = () => {
-                const data = {
+            const getFullBackupData = () => {
+                return {
                     version: 'v6_all',
                     exportDate: new Date().toISOString(),
                     workspaces,
                     activeWsId
                 };
-                setJsonBackupText(JSON.stringify(data, null, 2));
+            };
+
+            const handleOpenBackupModal = () => {
+                setJsonBackupText(JSON.stringify(getFullBackupData(), null, 2));
                 setShowBackupModal(true);
             };
 
-            const handleImportData = () => {
+            const handleDownloadJsonFile = () => {
+                try {
+                    const data = getFullBackupData();
+                    const jsonString = JSON.stringify(data, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const dateStr = getDateStrInTZ(currentTimezone);
+                    a.href = url;
+                    a.download = `JFF_Backup_${dateStr}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast('Đã tải xuống file JSON thành công!', 'success');
+                } catch (e) {
+                    showToast('Lỗi khi tải xuống file JSON!', 'warning');
+                }
+            };
+
+            const handleJsonFileUpload = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (parsed && Array.isArray(parsed.workspaces)) {
+                            saveSnapshotForUndo('Nhập dữ liệu từ file JSON');
+                            setWorkspaces(parsed.workspaces);
+                            if (parsed.activeWsId) setActiveWsId(parsed.activeWsId);
+                            setShowBackupModal(false);
+                            showToast('Đã nhập thành công tất cả Workspaces từ file JSON!', 'success');
+                        } else if (parsed && Array.isArray(parsed.funds)) {
+                            saveSnapshotForUndo('Nhập dữ liệu Workspace từ file JSON');
+                            updateCurrentWorkspaceData(ws => ({
+                                ...ws,
+                                funds: parsed.funds,
+                                history: Array.isArray(parsed.history) ? parsed.history : ws.history
+                            }));
+                            setShowBackupModal(false);
+                            showToast('Đã nhập dữ liệu cho Workspace hiện tại từ file JSON!', 'success');
+                        } else {
+                            showToast('Cấu trúc file JSON không hợp lệ!', 'warning');
+                        }
+                    } catch (err) {
+                        showToast('Không thể đọc file JSON, vui lòng kiểm tra định dạng!', 'warning');
+                    }
+                    e.target.value = '';
+                };
+                reader.readAsText(file);
+            };
+
+            const handleImportDataFromText = () => {
                 try {
                     const parsed = JSON.parse(jsonBackupText);
                     if (parsed && Array.isArray(parsed.workspaces)) {
-                        saveSnapshotForUndo('Khôi phục dữ liệu toàn bộ từ file');
+                        saveSnapshotForUndo('Khôi phục dữ liệu từ chuỗi văn bản JSON');
                         setWorkspaces(parsed.workspaces);
                         if (parsed.activeWsId) setActiveWsId(parsed.activeWsId);
                         setShowBackupModal(false);
                         showToast('Đã khôi phục toàn bộ dữ liệu thành công!', 'success');
                     } else if (parsed && Array.isArray(parsed.funds)) {
-                        // Legacy v5 single workspace restore
-                        saveSnapshotForUndo('Khôi phục dữ liệu Workspace hiện tại');
+                        saveSnapshotForUndo('Khôi phục dữ liệu Workspace từ văn bản JSON');
                         updateCurrentWorkspaceData(ws => ({
                             ...ws,
                             funds: parsed.funds,
@@ -528,14 +766,13 @@
                         setShowBackupModal(false);
                         showToast('Đã khôi phục dữ liệu cho Workspace hiện tại!', 'success');
                     } else {
-                        showToast('Cấu trúc file JSON không hợp lệ!', 'warning');
+                        showToast('Cấu trúc chuỗi JSON không hợp lệ!', 'warning');
                     }
                 } catch (e) {
                     showToast('Định dạng JSON bị lỗi, vui lòng kiểm tra!', 'warning');
                 }
             };
 
-            // Filtered History
             const filteredHistory = useMemo(() => {
                 return history.filter(item => {
                     const itemDate = item.date;
@@ -553,7 +790,6 @@
                 });
             }, [history, startDate, endDate, historySearch]);
 
-            // Aggregated History calculation mapped strictly to active funds
             const historyAggregatedData = useMemo(() => {
                 let grandTotalIncome = 0;
                 
@@ -608,7 +844,6 @@
                 };
             }, [filteredHistory, funds]);
 
-            // Reorder funds
             const moveFundOrder = (index, direction) => {
                 saveSnapshotForUndo('Thay đổi thứ tự quỹ');
                 const newFunds = [...funds];
@@ -656,7 +891,6 @@
                         {/* Header Bar */}
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2.5">
-                                {/* Hamburger Sidebar Drawer Trigger */}
                                 <button 
                                     onClick={() => setIsDrawerOpen(true)}
                                     className="w-10 h-10 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 flex items-center justify-center text-cyan-400 font-bold shadow-lg transition-all active:scale-95"
@@ -676,7 +910,6 @@
                                 </div>
                             </div>
 
-                            {/* Real-time Clock & Timezone badge */}
                             <div className="text-right">
                                 <div className="inline-flex flex-col items-end px-2.5 py-1 rounded-xl bg-slate-900/90 border border-slate-800">
                                     <span className="text-xs font-black text-cyan-400 font-mono tracking-wide">
@@ -741,7 +974,6 @@
                                         <span className="absolute right-4 text-cyan-500 font-bold text-lg">₫</span>
                                     </div>
 
-                                    {/* Income Note */}
                                     <div>
                                         <label className="text-[10px] text-slate-400 font-semibold uppercase block mb-1">
                                             Ghi chú / Nguồn thu (Không bắt buộc)
@@ -755,7 +987,6 @@
                                         />
                                     </div>
 
-                                    {/* Allocation Breakdown Bar */}
                                     {parsedTotalIncome > 0 && (
                                         <div className="space-y-1.5 pt-1">
                                             <div className="flex justify-between text-[10px] text-slate-400">
@@ -796,7 +1027,7 @@
                                     </div>
                                 </div>
 
-                                {/* Funds Input List */}
+                                {}
                                 <div className="space-y-2.5">
                                     <div className="flex justify-between items-center text-xs font-semibold text-slate-400 px-1">
                                         <span>DANH SÁCH QUỸ</span>
@@ -809,7 +1040,6 @@
                                             className="glass-card p-3 rounded-xl flex items-center justify-between gap-3 hover:border-slate-600 transition-all group relative overflow-hidden"
                                             style={{ borderLeft: `4px solid ${fund.color}` }}
                                         >
-                                            {/* Order Buttons */}
                                             <div className="flex flex-col gap-1 text-slate-500 text-xs">
                                                 <button 
                                                     onClick={() => moveFundOrder(idx, -1)}
@@ -829,7 +1059,6 @@
                                                 </button>
                                             </div>
 
-                                            {/* Fund Details */}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-bold text-sm text-slate-100 truncate">{fund.name}</span>
@@ -847,7 +1076,6 @@
                                                 </button>
                                             </div>
 
-                                            {/* Allocated Value & Override Badge */}
                                             <div className="text-right cursor-pointer" onClick={() => openFundOverrideModal(fund, fund.finalAmount)}>
                                                 <div className="font-extrabold text-sm text-emerald-400">
                                                     {formatVND(fund.finalAmount)}
@@ -995,7 +1223,6 @@
                         {}
                         {activeTab === 'history' && (
                             <div className="space-y-4 animate-fadeIn">
-                                {/* Date Range Search Filters */}
                                 <div className="glass-panel p-3.5 rounded-xl space-y-3">
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
@@ -1018,7 +1245,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Search by Note */}
                                     <div className="relative flex items-center">
                                         <i className="fa-solid fa-magnifying-glass absolute left-3 text-slate-500 text-xs"></i>
                                         <input 
@@ -1059,7 +1285,6 @@
                                     </div>
                                 </div>
 
-                                {/* Summary Statistics Card */}
                                 <div className="glass-panel p-4 rounded-xl border border-cyan-500/20 space-y-3">
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">THỐNG KÊ TỔNG HỢP TRONG KHOẢNG THỜI GIAN</p>
@@ -1094,7 +1319,6 @@
                                     </div>
                                 </div>
 
-                                {/* Collapsible Daily History List */}
                                 <div className="space-y-2">
                                     <p className="text-xs font-bold text-slate-400 px-1 uppercase">CHI TIẾT CÁC NGÀY GHI NHẬN ({filteredHistory.length})</p>
                                     
@@ -1168,16 +1392,13 @@
                     {}
                     {isDrawerOpen && (
                         <div className="fixed inset-0 z-50 flex">
-                            {/* Backdrop overlay */}
                             <div 
                                 onClick={() => setIsDrawerOpen(false)}
                                 className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
                             ></div>
 
-                            {/* Sidebar Drawer Panel */}
                             <div className="relative w-4/5 max-w-xs bg-slate-900 border-r border-slate-800 text-slate-200 h-full p-4 overflow-y-auto space-y-6 shadow-2xl z-10 animate-slideInLeft flex flex-col justify-between">
                                 <div className="space-y-5">
-                                    {/* Drawer Header */}
                                     <div className="flex justify-between items-center pb-3 border-b border-slate-800">
                                         <div className="flex items-center gap-2">
                                             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-sm">
@@ -1196,7 +1417,6 @@
                                         </button>
                                     </div>
 
-                                    {/* Section 1: Workspaces Management */}
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
                                             <label className="text-[11px] font-extrabold text-cyan-400 uppercase tracking-wider">
@@ -1242,7 +1462,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Section 2: Timezone Picker */}
                                     <div className="space-y-2 pt-2 border-t border-slate-800">
                                         <label className="text-[11px] font-extrabold text-cyan-400 uppercase tracking-wider block">
                                             <i className="fa-solid fa-globe mr-1"></i> Chọn Múi Giờ (Timezone)
@@ -1260,13 +1479,23 @@
                                         </select>
                                     </div>
 
-                                    {/* Section 3: Background Customization */}
                                     <div className="space-y-2 pt-2 border-t border-slate-800">
                                         <label className="text-[11px] font-extrabold text-cyan-400 uppercase tracking-wider block">
                                             <i className="fa-solid fa-image mr-1"></i> Đổi Hình Nền (Background)
                                         </label>
                                         
-                                        <div className="grid grid-cols-2 gap-1.5">
+                                        <label className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-cyan-600/30 transition-all active:scale-95">
+                                            <i className="fa-solid fa-images text-sm"></i>
+                                            <span>Chọn Ảnh Từ Gallery / Máy</span>
+                                            <input 
+                                                type="file" 
+                                                accept="image/*" 
+                                                onChange={handleFileSelect}
+                                                className="hidden" 
+                                            />
+                                        </label>
+
+                                        <div className="grid grid-cols-2 gap-1.5 pt-1">
                                             {BG_PRESETS.map((bg, idx) => (
                                                 <button 
                                                     key={idx}
@@ -1293,7 +1522,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Section 4: Backup & Restore */}
                                     <div className="space-y-2 pt-2 border-t border-slate-800">
                                         <label className="text-[11px] font-extrabold text-cyan-400 uppercase tracking-wider block">
                                             <i className="fa-solid fa-database mr-1"></i> Sao Lưu & Khôi Phục
@@ -1301,17 +1529,17 @@
                                         <button 
                                             onClick={() => {
                                                 setIsDrawerOpen(false);
-                                                handleExportData();
+                                                handleOpenBackupModal();
                                             }}
-                                            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 border border-slate-700"
+                                            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 border border-slate-700 shadow-md"
                                         >
-                                            <i className="fa-solid fa-file-export"></i> Nhập / Xuất File Backup (JSON)
+                                            <i className="fa-solid fa-file-export"></i> Nhập / Xuất File JSON (Backup)
                                         </button>
                                     </div>
                                 </div>
 
                                 <div className="pt-4 border-t border-slate-800 text-center text-[10px] text-slate-500">
-                                    JFF v6.0 • Workspace Ready
+                                    JFF v6.2 • Auto Save Enabled
                                 </div>
                             </div>
                         </div>
@@ -1322,52 +1550,35 @@
                     {editingFundOverride && (
                         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
                             <div className="glass-panel w-full max-w-sm rounded-2xl p-5 border border-cyan-500/30 space-y-4 animate-scaleUp">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h3 className="text-base font-bold text-white">Chốt Tiền Cho Quỹ</h3>
-                                        <p className="text-xs text-cyan-400 font-semibold">{editingFundOverride.name}</p>
-                                    </div>
-                                    <button 
-                                        onClick={() => setEditingFundOverride(null)}
-                                        className="text-slate-400 hover:text-white text-lg p-1"
-                                    >
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                        <i className="fa-solid fa-lock text-amber-400"></i> Chốt Số Tiền Quỹ: {editingFundOverride.name}
+                                    </h3>
+                                    <button onClick={() => setEditingFundOverride(null)} className="text-slate-400 hover:text-white">
                                         <i className="fa-solid fa-xmark"></i>
                                     </button>
                                 </div>
-
                                 <div>
-                                    <label className="text-[11px] text-slate-300 block mb-1">Nhập Số Tiền Muốn Chốt Cứng</label>
-                                    <div className="relative flex items-center">
-                                        <input 
-                                            type="text" 
-                                            inputMode="numeric"
-                                            value={overrideInputValue}
-                                            onChange={(e) => {
-                                                const raw = e.target.value.replace(/[^\d]/g, '');
-                                                setOverrideInputValue(raw ? formatVNDPlain(parseInt(raw, 10)) : '');
-                                            }}
-                                            className="w-full bg-slate-900 border border-slate-700 text-cyan-400 font-black text-lg px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-400"
-                                            autoFocus
-                                        />
-                                        <span className="absolute right-3 text-cyan-500 font-bold text-sm">₫</span>
-                                    </div>
+                                    <label className="text-[11px] text-slate-400 block mb-1">Nhập số tiền muốn chốt cố định (₫)</label>
+                                    <input 
+                                        type="text"
+                                        value={overrideInputValue}
+                                        onChange={(e) => setOverrideInputValue(formatVNDPlain(parseVNDInput(e.target.value)))}
+                                        className="w-full bg-slate-900 border border-slate-700 text-emerald-400 font-extrabold text-lg px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
+                                    />
                                 </div>
-
-                                <div className="flex gap-2 pt-2">
+                                <div className="flex gap-2">
                                     <button 
-                                        onClick={() => {
-                                            resetFundOverride(editingFundOverride.id, editingFundOverride.name);
-                                            setEditingFundOverride(null);
-                                        }}
+                                        onClick={() => resetFundOverride(editingFundOverride.id, editingFundOverride.name)}
                                         className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700"
                                     >
-                                        Đặt về Tự Động
+                                        Đặt lại tự động
                                     </button>
                                     <button 
                                         onClick={applyFundOverride}
-                                        className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/30"
+                                        className="flex-1 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/30"
                                     >
-                                        Chốt Tiền
+                                        Chốt số tiền
                                     </button>
                                 </div>
                             </div>
@@ -1379,28 +1590,24 @@
                         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
                             <div className="glass-panel w-full max-w-sm rounded-2xl p-5 border border-cyan-500/30 space-y-4 animate-scaleUp">
                                 <div className="flex justify-between items-center">
-                                    <h3 className="text-base font-bold text-white">Tạo Workspace Mới</h3>
-                                    <button 
-                                        onClick={() => setShowNewWsModal(false)}
-                                        className="text-slate-400 hover:text-white text-lg p-1"
-                                    >
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                        <i className="fa-solid fa-folder-plus text-cyan-400"></i> Tạo Workspace Mới
+                                    </h3>
+                                    <button onClick={() => setShowNewWsModal(false)} className="text-slate-400 hover:text-white">
                                         <i className="fa-solid fa-xmark"></i>
                                     </button>
                                 </div>
-
                                 <div>
-                                    <label className="text-[11px] text-slate-300 block mb-1">Tên Workspace (ví dụ: Công Ty, Gia Đình...)</label>
+                                    <label className="text-[11px] text-slate-400 block mb-1">Tên Workspace (Ví dụ: Kinh Doanh, Gia Đình...)</label>
                                     <input 
-                                        type="text" 
+                                        type="text"
                                         value={newWsNameInput}
                                         onChange={(e) => setNewWsNameInput(e.target.value)}
-                                        placeholder="Nhập tên không gian làm việc"
-                                        className="w-full bg-slate-900 border border-slate-700 text-white font-bold text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-400"
-                                        autoFocus
+                                        placeholder="Nhập tên..."
+                                        className="w-full bg-slate-900 border border-slate-700 text-white text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
                                     />
                                 </div>
-
-                                <div className="flex gap-2 pt-2">
+                                <div className="flex gap-2">
                                     <button 
                                         onClick={() => setShowNewWsModal(false)}
                                         className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700"
@@ -1409,9 +1616,9 @@
                                     </button>
                                     <button 
                                         onClick={handleCreateWorkspace}
-                                        className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/30"
+                                        className="flex-1 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-600/30"
                                     >
-                                        Tạo Mới
+                                        Tạo Workspace
                                     </button>
                                 </div>
                             </div>
@@ -1424,8 +1631,10 @@
                             <div className="glass-panel w-full max-w-md rounded-2xl p-5 border border-cyan-500/30 space-y-4 animate-scaleUp">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <h3 className="text-base font-bold text-white">Sao Lưu & Khôi Phục Dữ Liệu</h3>
-                                        <p className="text-xs text-slate-400">Copy mã JSON bên dưới để sao lưu hoặc dán mã vào để khôi phục</p>
+                                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                            <i className="fa-solid fa-file-code text-cyan-400"></i> Quản Lý Dữ Liệu JSON
+                                        </h3>
+                                        <p className="text-xs text-slate-400">Tải xuống file sao lưu hoặc chọn file JSON từ thiết bị để khôi phục</p>
                                     </div>
                                     <button 
                                         onClick={() => setShowBackupModal(false)}
@@ -1435,9 +1644,35 @@
                                     </button>
                                 </div>
 
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    <button 
+                                        onClick={handleDownloadJsonFile}
+                                        className="py-3 px-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-2 transition-all active:scale-95"
+                                    >
+                                        <i className="fa-solid fa-download text-sm"></i>
+                                        <span>Tải Xuống JSON</span>
+                                    </button>
+
+                                    <label className="py-3 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 text-center">
+                                        <i className="fa-solid fa-file-arrow-up text-sm"></i>
+                                        <span>Nhập JSON từ File</span>
+                                        <input 
+                                            type="file"
+                                            accept=".json,application/json"
+                                            onChange={handleJsonFileUpload}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                </div>
+
+                                <div className="relative my-2">
+                                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
+                                    <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-slate-900 px-2 text-slate-500 font-semibold">Hoặc tùy chỉnh dạng văn bản</span></div>
+                                </div>
+
                                 <div>
                                     <textarea 
-                                        rows="8"
+                                        rows="6"
                                         value={jsonBackupText}
                                         onChange={(e) => setJsonBackupText(e.target.value)}
                                         className="w-full bg-slate-900 border border-slate-700 text-slate-300 text-xs p-3 rounded-xl focus:outline-none focus:border-cyan-500 font-mono"
@@ -1449,18 +1684,96 @@
                                     <button 
                                         onClick={() => {
                                             if (copyToClipboard(jsonBackupText)) {
-                                                showToast('Đã sao chép dữ liệu JSON!', 'success');
+                                                showToast('Đã sao chép chuỗi JSON!', 'success');
                                             }
                                         }}
-                                        className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold rounded-xl border border-slate-700"
+                                        className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold rounded-xl border border-slate-700 flex items-center justify-center gap-1.5"
                                     >
-                                        <i className="fa-regular fa-copy"></i> Copy JSON
+                                        <i className="fa-regular fa-copy"></i> Sao Chép
                                     </button>
                                     <button 
-                                        onClick={handleImportData}
-                                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/30"
+                                        onClick={handleImportDataFromText}
+                                        className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-1.5"
                                     >
-                                        <i className="fa-solid fa-file-import"></i> Khôi Phục
+                                        <i className="fa-solid fa-check"></i> Áp Dụng Chuỗi Text
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL: Full-screen Image Adjuster & Cropper Modal */}
+                    {imageToAdjust && (
+                        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col justify-between p-4 animate-fadeIn">
+                            <div className="flex justify-between items-center pt-2">
+                                <div>
+                                    <h3 className="text-sm font-bold text-white">Căn Chỉnh Hình Nền</h3>
+                                    <p className="text-[10px] text-slate-400">Kéo để di chuyển, dùng thanh trượt để phóng to/thu nhỏ</p>
+                                </div>
+                                <button 
+                                    onClick={() => setImageToAdjust(null)} 
+                                    className="text-slate-400 hover:text-white p-2"
+                                >
+                                    <i className="fa-solid fa-xmark text-lg"></i>
+                                </button>
+                            </div>
+
+                            <div 
+                                ref={cropContainerRef}
+                                className="relative w-full max-w-xs mx-auto h-[420px] bg-slate-900 rounded-2xl border-2 border-dashed border-cyan-500/50 overflow-hidden cursor-move touch-none flex items-center justify-center my-auto shadow-2xl"
+                                onMouseDown={handleMouseDown}
+                                onMouseMove={handleMouseMove}
+                                onMouseUp={handleMouseUp}
+                                onMouseLeave={handleMouseUp}
+                                onTouchStart={handleTouchStart}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
+                            >
+                                <div 
+                                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                    style={{
+                                        transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                                        transition: isDragging ? 'none' : 'transform 0.05s ease-out'
+                                    }}
+                                >
+                                    <img 
+                                        src={imageToAdjust} 
+                                        alt="Adjust preview" 
+                                        className="max-w-none max-h-none object-contain select-none pointer-events-none"
+                                        style={{ width: '100%', height: '100%' }}
+                                    />
+                                </div>
+
+                                <div className="absolute inset-0 border-[3px] border-cyan-400/30 pointer-events-none rounded-2xl"></div>
+                            </div>
+
+                            <div className="space-y-4 max-w-xs mx-auto w-full pb-4">
+                                <div className="flex items-center gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                                    <i className="fa-solid fa-magnifying-glass-minus text-slate-400 text-xs"></i>
+                                    <input 
+                                        type="range" 
+                                        min="0.5" 
+                                        max="3" 
+                                        step="0.05"
+                                        value={zoom}
+                                        onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                        className="w-full accent-cyan-500"
+                                    />
+                                    <i className="fa-solid fa-magnifying-glass-plus text-slate-400 text-xs"></i>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => setImageToAdjust(null)}
+                                        className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700"
+                                    >
+                                        Hủy bỏ
+                                    </button>
+                                    <button 
+                                        onClick={applyCroppedImage}
+                                        className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-1.5"
+                                    >
+                                        <i className="fa-solid fa-check"></i> Áp dụng
                                     </button>
                                 </div>
                             </div>
@@ -1499,27 +1812,48 @@
                                 </button>
                             </div>
 
-                            <div className="flex items-center gap-1.5 border-l border-slate-800 pl-2">
-                                {/* Undo Button */}
+                            <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
                                 <button 
                                     onClick={handleUndo}
                                     disabled={undoStack.length === 0}
-                                    className={`p-2.5 rounded-xl text-xs font-medium flex items-center justify-center transition-all ${
+                                    className={`p-2.5 rounded-xl text-xs font-medium flex items-center justify-center transition-all relative ${
                                         undoStack.length > 0 
                                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30' 
-                                            : 'bg-slate-800/40 text-slate-600 border border-slate-800 opacity-50 cursor-not-allowed'
+                                            : 'bg-slate-800/40 text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed'
                                     }`}
-                                    title={undoStack.length > 0 ? `Hoàn tác (${undoStack.length})` : 'Không có gì để hoàn tác'}
+                                    title={undoStack.length > 0 ? `Hoàn tác (${undoStack.length}/10)` : 'Không có gì để hoàn tác'}
                                 >
                                     <i className="fa-solid fa-rotate-left"></i>
+                                    {undoStack.length > 0 && (
+                                        <span className="absolute -top-1 -right-1 bg-amber-500 text-black font-extrabold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
+                                            {undoStack.length}
+                                        </span>
+                                    )}
                                 </button>
 
-                                {/* Save Button */}
+                                <button 
+                                    onClick={handleRedo}
+                                    disabled={redoStack.length === 0}
+                                    className={`p-2.5 rounded-xl text-xs font-medium flex items-center justify-center transition-all relative ${
+                                        redoStack.length > 0 
+                                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30' 
+                                            : 'bg-slate-800/40 text-slate-600 border border-slate-800 opacity-40 cursor-not-allowed'
+                                    }`}
+                                    title={redoStack.length > 0 ? `Khôi phục/Làm lại (${redoStack.length}/10)` : 'Không có thao tác nào để khôi phục'}
+                                >
+                                    <i className="fa-solid fa-rotate-right"></i>
+                                    {redoStack.length > 0 && (
+                                        <span className="absolute -top-1 -right-1 bg-blue-500 text-white font-extrabold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
+                                            {redoStack.length}
+                                        </span>
+                                    )}
+                                </button>
+
                                 {activeTab === 'input' && (
                                     <button 
                                         onClick={handleRecordAllocation}
-                                        className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all active:scale-95"
-                                        title="Lưu ghi nhận thu nhập"
+                                        className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all active:scale-95 ml-0.5"
+                                        title="Lưu ghi nhận thu nhập vào lịch sử"
                                     >
                                         <i className="fa-solid fa-plus text-base"></i>
                                     </button>
