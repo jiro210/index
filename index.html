@@ -2,27 +2,26 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>JFF - Jiro Financial Freedom</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- React & ReactDOM React 18 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <!-- Babel Standalone -->
+    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- CropperJS CSS & JS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    <!-- Google Fonts Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
-            min-height: 100vh;
-            overflow-x: hidden;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
         }
         /* Custom scrollbar */
         ::-webkit-scrollbar {
@@ -33,298 +32,166 @@
             background: rgba(15, 23, 42, 0.6);
         }
         ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.4);
+            border-radius: 9999px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.4);
+            background: rgba(59, 130, 246, 0.7);
         }
-        .drag-ghost {
-            opacity: 0.4;
-            transform: scale(0.98);
+        /* Glassmorphism styling */
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glow-effect {
+            box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.25);
         }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 antialiased selection:bg-blue-500 selection:text-white">
+<body class="min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-white">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Default initial profile with type support ('percent' or 'vnd')
-        const DEFAULT_PROFILES = [
-            {
-                id: 'default-6-jars',
-                name: 'Giao Diện 1 (6 Quỹ Mặc Định)',
-                funds: [
-                    { id: '1', name: 'Nhu cầu thiết yếu (NEC)', type: 'percent', percent: 55, vndAmount: 0, color: '#ef4444' },
-                    { id: '2', name: 'Tự do tài chính (FFA)', type: 'percent', percent: 10, vndAmount: 0, color: '#3b82f6' },
-                    { id: '3', name: 'Tiết kiệm dài hạn (LTSS)', type: 'percent', percent: 10, vndAmount: 0, color: '#10b981' },
-                    { id: '4', name: 'Học tập & Phát triển (EDU)', type: 'percent', percent: 10, vndAmount: 0, color: '#f59e0b' },
-                    { id: '5', name: 'Hưởng thụ (PLAY)', type: 'percent', percent: 10, vndAmount: 0, color: '#ec4899' },
-                    { id: '6', name: 'Cho đi (GIVE)', type: 'percent', percent: 5, vndAmount: 0, color: '#8b5cf6' }
-                ]
-            }
-        ];
-
-        const DEFAULT_RULES = [
-            { id: '1', title: '1. Kỷ luật nhất quán', content: 'Ngay khi nhận được bất kỳ nguồn thu nhập nào (lương, thưởng, kinh doanh), hãy chia ngay lập tức theo đúng tỷ lệ % các quỹ.', color: '#3b82f6' },
-            { id: '2', title: '2. Quỹ tự do tài chính (FFA) là con gà đẻ trứng vàng', content: 'Tuyệt đối không dùng quỹ FFA cho các mục đích chi tiêu sinh hoạt. Quỹ này chỉ dùng để đầu tư sinh lời và tích lũy tài sản.', color: '#10b981' },
-            { id: '3', title: '3. Hưởng thụ không tội lỗi (PLAY)', content: 'Quỹ PLAY giúp tinh thần bạn luôn thoải mái. Hãy tiêu hết tiền quỹ PLAY mỗi tháng hoặc mỗi quý cho các hoạt động nâng cao chất lượng sống.', color: '#ec4899' }
-        ];
-
-        const COLOR_PRESETS = [
-            { name: 'Xanh Lam', hex: '#3b82f6' },
-            { name: 'Xanh Lục', hex: '#10b981' },
-            { name: 'Tím Huyền Bí', hex: '#8b5cf6' },
-            { name: 'Hồng Rạng Rỡ', hex: '#ec4899' },
-            { name: 'Cam Năng Lượng', hex: '#f97316' },
-            { name: 'Đỏ Đam Mê', hex: '#ef4444' },
-            { name: 'Vàng Hoàng Kim', hex: '#eab308' },
-            { name: 'Xanh Cổ Vịt', hex: '#06b6d4' }
-        ];
-
-        const GMT_OPTIONS = [];
-        for (let i = -12; i <= 14; i++) {
-            const sign = i > 0 ? '+' : '';
-            GMT_OPTIONS.push({ value: i, label: `GMT ${sign}${i}` });
-        }
-
-        const formatVND = (amount) => {
-            if (isNaN(amount) || amount === null || amount === undefined) return '0 ₫';
-            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-        };
-
-        const getTZDate = (offset) => {
-            const now = new Date();
-            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-            return new Date(utc + (3600000 * offset));
-        };
-
-        const formatTZDate = (tzDate) => {
-            const year = tzDate.getFullYear();
-            const month = String(tzDate.getMonth() + 1).padStart(2, '0');
-            const day = String(tzDate.getDate()).padStart(2, '0');
+        // Date utilities formatted for current timezone
+        const getTodayDateStr = () => {
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
 
-        const formatFirstDayOfMonth = (tzDate) => {
-            const year = tzDate.getFullYear();
-            const month = String(tzDate.getMonth() + 1).padStart(2, '0');
+        const getFirstDayOfMonthStr = () => {
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
             return `${year}-${month}-01`;
         };
 
-        const formatTZTime = (tzDate) => {
-            return tzDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const formatVND = (num) => {
+            if (num === undefined || num === null || isNaN(num)) return '0 ₫';
+            return new Intl.NumberFormat('vi-VN').format(num) + ' ₫';
         };
 
-        const formatVNDInput = (val) => {
-            if (val === undefined || val === null) return '';
-            let strVal = String(val);
-            let isNegative = strVal.startsWith('-');
-            let digitsOnly = strVal.replace(/[^\d]/g, '');
-            if (digitsOnly === '') return isNegative ? '-' : '';
-            digitsOnly = digitsOnly.replace(/^0+/, '');
-            if (digitsOnly === '') digitsOnly = '0';
-            let formatted = digitsOnly.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-            return isNegative ? '-' + formatted : formatted;
+        const formatVNDPlain = (num) => {
+            if (num === undefined || num === null || isNaN(num)) return '0';
+            return new Intl.NumberFormat('vi-VN').format(num);
         };
 
-        const parseFormattedNumber = (val) => {
-            if (!val) return 0;
-            return Number(String(val).replace(/[^\d-]/g, '')) || 0;
+        const parseVNDInput = (str) => {
+            if (!str) return 0;
+            const cleaned = str.toString().replace(/[^\d-]/g, '');
+            return parseInt(cleaned, 10) || 0;
         };
+
+        // Initial default funds list
+        const DEFAULT_FUNDS = [
+            { id: 'f1', name: 'Trợ', bankInfo: 'MBB 0001', type: 'vnd', percent: 0, vndAmount: 300000, color: '#3b82f6' },
+            { id: 'f2', name: 'Ăn uống', bankInfo: 'MBB 0002', type: 'percent', percent: 40, vndAmount: 0, color: '#10b981' },
+            { id: 'f3', name: 'Đi chơi', bankInfo: 'VCB 1001', type: 'percent', percent: 30, vndAmount: 0, color: '#8b5cf6' },
+            { id: 'f4', name: 'Dự phòng', bankInfo: 'TCB 1002', type: 'percent', percent: 10, vndAmount: 0, color: '#ec4899' },
+            { id: 'f5', name: 'Tiết kiệm', bankInfo: 'TCB 1003', type: 'percent', percent: 20, vndAmount: 0, color: '#f59e0b' }
+        ];
 
         function App() {
-            const [profiles, setProfiles] = useState(() => {
-                const saved = localStorage.getItem('jff_profiles_v3');
-                if (!saved) return DEFAULT_PROFILES;
-                try {
-                    const parsed = JSON.parse(saved);
-                    // Ensure funds have type and vndAmount fields
-                    return parsed.map(p => ({
-                        ...p,
-                        funds: p.funds.map(f => ({
-                            ...f,
-                            type: f.type || 'percent',
-                            vndAmount: f.vndAmount !== undefined ? f.vndAmount : 0,
-                            percent: f.percent !== undefined ? f.percent : 0
-                        }))
-                    }));
-                } catch (e) {
-                    return DEFAULT_PROFILES;
-                }
+            // Tabs: 'input' | 'config' | 'history'
+            const [activeTab, setActiveTab] = useState('input');
+
+            // Persistent States
+            const [funds, setFunds] = useState(() => {
+                const saved = localStorage.getItem('jff_funds_v4');
+                return saved ? JSON.parse(saved) : DEFAULT_FUNDS;
             });
 
-            const [activeProfileId, setActiveProfileId] = useState(() => {
-                const saved = localStorage.getItem('jff_active_profile_id_v3');
-                return saved || DEFAULT_PROFILES[0].id;
-            });
-
-            const [historyData, setHistoryData] = useState(() => {
-                const saved = localStorage.getItem('jff_history_v3');
+            const [totalIncomeInput, setTotalIncomeInput] = useState('');
+            const [overrides, setOverrides] = useState({}); // { fundId: amount }
+            
+            const [history, setHistory] = useState(() => {
+                const saved = localStorage.getItem('jff_history_v4');
                 return saved ? JSON.parse(saved) : [];
             });
-
-            const [rules, setRules] = useState(() => {
-                const saved = localStorage.getItem('jff_rules_v3');
-                return saved ? JSON.parse(saved) : DEFAULT_RULES;
-            });
-
-            const [themeColor, setThemeColor] = useState(() => {
-                return localStorage.getItem('jff_theme_color_v3') || '#3b82f6';
-            });
-
-            const [glassOpacity, setGlassOpacity] = useState(() => {
-                return Number(localStorage.getItem('jff_glass_opacity_v3')) || 25;
-            });
-
-            const [glassBlur, setGlassBlur] = useState(() => {
-                return Number(localStorage.getItem('jff_glass_blur_v3')) || 12;
-            });
-
-            const [bgImage, setBgImage] = useState(() => {
-                return localStorage.getItem('jff_bg_image_v3') || '';
-            });
-
-            const [gmtOffset, setGmtOffset] = useState(() => {
-                const saved = localStorage.getItem('jff_gmt_offset_v3');
-                return saved !== null ? Number(saved) : (-(new Date().getTimezoneOffset() / 60));
-            });
-
-            const [currentTZDate, setCurrentTZDate] = useState(() => {
-                return localStorage.getItem('jff_last_date_v3') || '';
-            });
-
-            const [realTime, setRealTime] = useState('--:--:--');
-
-            // Navigation & Modal States
-            const [activeTab, setActiveTab] = useState('input');
-            const [incomeInput, setIncomeInput] = useState(() => {
-                const saved = localStorage.getItem('jff_current_income_v3') || '';
-                return saved ? formatVNDInput(saved) : '';
-            });
-            const [showSettings, setShowSettings] = useState(false);
-            const [showNewProfileModal, setShowNewProfileModal] = useState(false);
-            const [showSwitchProfileModal, setShowSwitchProfileModal] = useState(false);
-            const [showColorPickerModal, setShowColorPickerModal] = useState(false);
-            const [tempCustomColor, setTempCustomColor] = useState('#3b82f6');
-            const [newProfileName, setNewProfileName] = useState('');
-            const [toast, setToast] = useState(null);
-
-            // Manual Fund Additions / Target Adjustments
-            const [fundAdditions, setFundAdditions] = useState(() => {
-                const saved = localStorage.getItem('jff_fund_additions_v3');
-                return saved ? JSON.parse(saved) : {};
-            });
-            const [activeFundForManual, setActiveFundForManual] = useState(null);
-            const [manualAmountInput, setManualAmountInput] = useState('');
-
-            // Drag and Drop state for Input tab reordering
-            const [draggedFundIndex, setDraggedFundIndex] = useState(null);
-            const [dragOverFundIndex, setDragOverFundIndex] = useState(null);
-
-            // Rules & Profile Editing States
-            const [editingRuleId, setEditingRuleId] = useState(null);
-            const [tempRule, setTempRule] = useState(null);
-            const [profileToDelete, setProfileToDelete] = useState(null);
-
-            const [fromDate, setFromDate] = useState(() => {
-                const savedGmt = localStorage.getItem('jff_gmt_offset_v3');
-                const gmt = savedGmt !== null ? Number(savedGmt) : (-(new Date().getTimezoneOffset() / 60));
-                return formatFirstDayOfMonth(getTZDate(gmt));
-            });
-            const [toDate, setToDate] = useState(() => {
-                const savedGmt = localStorage.getItem('jff_gmt_offset_v3');
-                const gmt = savedGmt !== null ? Number(savedGmt) : (-(new Date().getTimezoneOffset() / 60));
-                return formatTZDate(getTZDate(gmt));
-            });
-
-            const [expandedRecordIds, setExpandedRecordIds] = useState({});
-
-            // Image Cropper States
-            const [tempImage, setTempImage] = useState(null);
-            const [cropAspectRatio, setCropAspectRatio] = useState(NaN);
-            const imageRef = useRef(null);
-            const cropperRef = useRef(null);
 
             // Undo Stack
             const [undoStack, setUndoStack] = useState([]);
 
-            // State refs for auto-save routine
-            const incomeRef = useRef(incomeInput);
-            const profileRef = useRef(activeProfileId);
-            const profilesRef = useRef(profiles);
-            const dateRef = useRef(currentTZDate);
-            const additionsRef = useRef(fundAdditions);
-            
-            useEffect(() => { incomeRef.current = incomeInput; }, [incomeInput]);
-            useEffect(() => { profileRef.current = activeProfileId; }, [activeProfileId]);
-            useEffect(() => { profilesRef.current = profiles; }, [profiles]);
-            useEffect(() => { dateRef.current = currentTZDate; }, [currentTZDate]);
-            useEffect(() => { additionsRef.current = fundAdditions; }, [fundAdditions]);
+            // History Date Range Filters (Default: First day of current month to today)
+            const [startDate, setStartDate] = useState(getFirstDayOfMonthStr());
+            const [endDate, setEndDate] = useState(getTodayDateStr());
+            const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+
+            // Modal dialog for manual fund override
+            const [editingFundOverride, setEditingFundOverride] = useState(null);
+            const [overrideInputValue, setOverrideInputValue] = useState('');
+
+            // Notification message state
+            const [toastMessage, setToastMessage] = useState(null);
+
+            const showToast = (msg, type = 'info') => {
+                setToastMessage({ msg, type });
+                setTimeout(() => setToastMessage(null), 2500);
+            };
+
+            // Save funds & history to LocalStorage
+            useEffect(() => {
+                localStorage.setItem('jff_funds_v4', JSON.stringify(funds));
+            }, [funds]);
 
             useEffect(() => {
-                localStorage.setItem('jff_profiles_v3', JSON.stringify(profiles));
-            }, [profiles]);
+                localStorage.setItem('jff_history_v4', JSON.stringify(history));
+            }, [history]);
 
-            useEffect(() => {
-                localStorage.setItem('jff_active_profile_id_v3', activeProfileId);
-            }, [activeProfileId]);
+            const saveSnapshotForUndo = (description) => {
+                const snapshot = {
+                    funds: JSON.parse(JSON.stringify(funds)),
+                    history: JSON.parse(JSON.stringify(history)),
+                    overrides: { ...overrides },
+                    totalIncomeInput,
+                    description
+                };
+                setUndoStack(prev => [...prev.slice(-10), snapshot]); // keep last 10 steps
+            };
 
-            useEffect(() => {
-                localStorage.setItem('jff_history_v3', JSON.stringify(historyData));
-            }, [historyData]);
+            const handleUndo = () => {
+                if (undoStack.length === 0) return;
+                const lastState = undoStack[undoStack.length - 1];
+                setUndoStack(prev => prev.slice(0, -1));
 
-            useEffect(() => {
-                localStorage.setItem('jff_rules_v3', JSON.stringify(rules));
-            }, [rules]);
+                setFunds(lastState.funds);
+                setHistory(lastState.history);
+                setOverrides(lastState.overrides);
+                setTotalIncomeInput(lastState.totalIncomeInput);
+                showToast(`Đã hoàn tác: ${lastState.description}`, 'success');
+            };
 
-            useEffect(() => {
-                localStorage.setItem('jff_theme_color_v3', themeColor);
-            }, [themeColor]);
+            const parsedTotalIncome = useMemo(() => parseVNDInput(totalIncomeInput), [totalIncomeInput]);
 
-            useEffect(() => {
-                localStorage.setItem('jff_glass_opacity_v3', glassOpacity.toString());
-            }, [glassOpacity]);
+            // Calculation Logic:
+            // 1. Fixed VND funds subtract their default base amount from Total Income.
+            // 2. Remaining income is distributed among Percent funds based on their configured %.
+            // 3. If a fund has an override, totalAllocated becomes the overridden amount, but DOES NOT shift pool calculations for other funds.
+            const calculatedAllocations = useMemo(() => {
+                const income = parsedTotalIncome;
 
-            useEffect(() => {
-                localStorage.setItem('jff_glass_blur_v3', glassBlur.toString());
-            }, [glassBlur]);
-
-            useEffect(() => {
-                localStorage.setItem('jff_bg_image_v3', bgImage);
-            }, [bgImage]);
-
-            useEffect(() => {
-                localStorage.setItem('jff_current_income_v3', incomeInput);
-            }, [incomeInput]);
-
-            useEffect(() => {
-                localStorage.setItem('jff_fund_additions_v3', JSON.stringify(fundAdditions));
-            }, [fundAdditions]);
-
-            useEffect(() => {
-                localStorage.setItem('jff_gmt_offset_v3', gmtOffset.toString());
-            }, [gmtOffset]);
-
-            // Core allocation logic: First deduct fixed VND funds, then divide remaining income among % funds
-            const calculateAllocations = (fundsList, totalIncomeNum, additionsMap) => {
-                const income = totalIncomeNum || 0;
-
-                // 1. Calculate sum of fixed VND funds
-                let totalVndFixed = 0;
-                fundsList.forEach(f => {
+                // Sum of default fixed VND fund amounts
+                let defaultVndSum = 0;
+                funds.forEach(f => {
                     if (f.type === 'vnd') {
-                        totalVndFixed += (Number(f.vndAmount) || 0);
+                        defaultVndSum += (Number(f.vndAmount) || 0);
                     }
                 });
 
-                // 2. Compute remaining income for % funds
-                const remainingForPercent = Math.max(0, income - totalVndFixed);
+                const remainingForPercent = Math.max(0, income - defaultVndSum);
 
-                // 3. Compute base allocation per fund
-                return fundsList.map(fund => {
+                return funds.map(fund => {
                     let baseAllocated = 0;
                     if (income > 0) {
                         if (fund.type === 'vnd') {
@@ -333,1404 +200,727 @@
                             baseAllocated = Math.round((remainingForPercent * (Number(fund.percent) || 0)) / 100);
                         }
                     }
-                    const extra = additionsMap[fund.id] || 0;
-                    const totalAllocated = baseAllocated + extra;
+
+                    const isOverridden = overrides[fund.id] !== undefined;
+                    const finalAmount = isOverridden ? overrides[fund.id] : baseAllocated;
 
                     return {
                         ...fund,
                         baseAllocated,
-                        extra,
-                        totalAllocated
+                        finalAmount,
+                        isOverridden
                     };
                 });
+            }, [funds, parsedTotalIncome, overrides]);
+
+            const handleIncomeChange = (e) => {
+                const rawVal = e.target.value.replace(/[^\d]/g, '');
+                if (!rawVal) {
+                    setTotalIncomeInput('');
+                    return;
+                }
+                const num = parseInt(rawVal, 10);
+                setTotalIncomeInput(formatVNDPlain(num));
             };
 
-            useEffect(() => {
-                const checkBootAutoSave = () => {
-                    const savedDate = localStorage.getItem('jff_last_date_v3');
-                    const savedIncomeStr = localStorage.getItem('jff_current_income_v3') || '';
-                    const savedIncome = parseFormattedNumber(savedIncomeStr);
-                    const savedAdditionsStr = localStorage.getItem('jff_fund_additions_v3');
-                    const savedAdditions = savedAdditionsStr ? JSON.parse(savedAdditionsStr) : {};
-                    const hasAdditions = Object.values(savedAdditions).some(v => v !== 0);
-                    
-                    const tzDateObj = getTZDate(gmtOffset);
-                    const todayStr = formatTZDate(tzDateObj);
+            const openFundOverrideModal = (fund, currentFinalAmount) => {
+                setEditingFundOverride(fund);
+                setOverrideInputValue(formatVNDPlain(currentFinalAmount));
+            };
 
-                    if (savedDate && savedDate !== todayStr && (savedIncome !== 0 || hasAdditions)) {
-                        const activeProf = profilesRef.current.find(p => p.id === profileRef.current) || DEFAULT_PROFILES[0];
-                        const calculated = calculateAllocations(activeProf.funds, savedIncome, savedAdditions);
-                        
-                        let totalSaved = 0;
-                        const allocations = calculated.map(f => {
-                            totalSaved += f.totalAllocated;
-                            return {
-                                fundId: f.id,
-                                fundName: f.name,
-                                type: f.type,
-                                percent: f.percent,
-                                vndAmount: f.vndAmount,
-                                amount: f.totalAllocated
-                            };
-                        });
+            const applyFundOverride = () => {
+                if (!editingFundOverride) return;
+                saveSnapshotForUndo('Chốt thủ công quỹ ' + editingFundOverride.name);
+                const numVal = parseVNDInput(overrideInputValue);
+                setOverrides(prev => ({
+                    ...prev,
+                    [editingFundOverride.id]: numVal
+                }));
+                setEditingFundOverride(null);
+                showToast(`Đã chốt ${editingFundOverride.name}: ${formatVND(numVal)}`, 'success');
+            };
 
-                        const newRecord = {
-                            id: Date.now().toString(),
-                            date: savedDate,
-                            time: "23:59:59",
-                            totalIncome: savedIncome,
-                            profileId: activeProf.id,
-                            profileName: activeProf.name,
-                            allocations: allocations
-                        };
+            const resetFundOverride = (fundId, fundName) => {
+                saveSnapshotForUndo('Bỏ chốt thủ công ' + fundName);
+                setOverrides(prev => {
+                    const next = { ...prev };
+                    delete next[fundId];
+                    return next;
+                });
+                showToast(`Đã đặt lại tự động cho ${fundName}`);
+            };
 
-                        setHistoryData(prev => [newRecord, ...prev]);
-                        setIncomeInput('');
-                        setFundAdditions({});
-                        showToast(`Đã tự động lưu phân bổ ngày ${savedDate} khi mở lại app`);
-                    }
-                    
-                    setCurrentTZDate(todayStr);
-                    localStorage.setItem('jff_last_date_v3', todayStr);
+            const handleRecordAllocation = () => {
+                if (parsedTotalIncome <= 0) {
+                    showToast('Vui lòng nhập Tổng Thu Nhập > 0', 'warning');
+                    return;
+                }
+
+                saveSnapshotForUndo('Ghi nhận thu nhập');
+
+                const now = new Date();
+                const timeString = now.toTimeString().split(' ')[0];
+                const dateStr = getTodayDateStr();
+
+                const record = {
+                    id: 'rec_' + Date.now(),
+                    date: dateStr,
+                    timestamp: `${dateStr} ${timeString}`,
+                    totalIncome: parsedTotalIncome,
+                    allocations: calculatedAllocations.map(a => ({
+                        fundId: a.id,
+                        fundName: a.name,
+                        bankInfo: a.bankInfo,
+                        amount: a.finalAmount
+                    }))
                 };
 
-                checkBootAutoSave();
-
-                const interval = setInterval(() => {
-                    const tzDateObj = getTZDate(gmtOffset);
-                    const newDateStr = formatTZDate(tzDateObj);
-                    const newTimeStr = formatTZTime(tzDateObj);
-                    
-                    setRealTime(newTimeStr);
-
-                    if (dateRef.current && newDateStr !== dateRef.current) {
-                        const income = parseFormattedNumber(incomeRef.current);
-                        const additions = additionsRef.current || {};
-                        const hasAdditions = Object.values(additions).some(v => v !== 0);
-
-                        if (income !== 0 || hasAdditions) {
-                            const activeProf = profilesRef.current.find(p => p.id === profileRef.current) || DEFAULT_PROFILES[0];
-                            const calculated = calculateAllocations(activeProf.funds, income, additions);
-                            
-                            const allocations = calculated.map(f => ({
-                                fundId: f.id,
-                                fundName: f.name,
-                                type: f.type,
-                                percent: f.percent,
-                                vndAmount: f.vndAmount,
-                                amount: f.totalAllocated
-                            }));
-
-                            const newRecord = {
-                                id: Date.now().toString(),
-                                date: dateRef.current,
-                                time: "23:59:59",
-                                totalIncome: income,
-                                profileId: activeProf.id,
-                                profileName: activeProf.name,
-                                allocations: allocations
-                            };
-
-                            setHistoryData(prev => [newRecord, ...prev]);
-                            setIncomeInput('');
-                            setFundAdditions({});
-                            showToast(`Đã tự động lưu phân bổ cho ngày ${dateRef.current}`);
-                        }
-                        setCurrentTZDate(newDateStr);
-                        localStorage.setItem('jff_last_date_v3', newDateStr);
-                    } else if (!dateRef.current) {
-                        setCurrentTZDate(newDateStr);
-                        localStorage.setItem('jff_last_date_v3', newDateStr);
-                    }
-                }, 1000);
-                
-                return () => clearInterval(interval);
-            }, [gmtOffset]);
-
-            const showToast = (message) => {
-                setToast(message);
-                setTimeout(() => {
-                    setToast(null);
-                }, 3000);
+                setHistory(prev => [record, ...prev]);
+                setOverrides({});
+                showToast('Đã lưu lịch sử phân bổ thành công!', 'success');
             };
 
-            const activeProfile = useMemo(() => {
-                return profiles.find(p => p.id === activeProfileId) || profiles[0] || DEFAULT_PROFILES[0];
-            }, [profiles, activeProfileId]);
+            const handleDeleteHistoryItem = (recId) => {
+                saveSnapshotForUndo('Xóa lịch sử ghi nhận');
+                setHistory(prev => prev.filter(item => item.id !== recId));
+                showToast('Đã xóa 1 bản ghi lịch sử');
+            };
 
-            // Totals calculation for percentages and VND fixed funds
-            const configTotals = useMemo(() => {
-                if (!activeProfile || !activeProfile.funds) return { totalPercent: 0, totalVndFixed: 0 };
-                let totalPercent = 0;
-                let totalVndFixed = 0;
-                activeProfile.funds.forEach(f => {
-                    if (f.type === 'vnd') {
-                        totalVndFixed += (Number(f.vndAmount) || 0);
-                    } else {
-                        totalPercent += (Number(f.percent) || 0);
-                    }
-                });
-                return { totalPercent, totalVndFixed };
-            }, [activeProfile]);
-
-            // Calculated current allocations array for active profile funds
-            const currentAllocations = useMemo(() => {
-                const incomeNum = parseFormattedNumber(incomeInput);
-                return calculateAllocations(activeProfile.funds, incomeNum, fundAdditions);
-            }, [activeProfile, incomeInput, fundAdditions]);
-
-            // Filtered history by selected date range
             const filteredHistory = useMemo(() => {
-                return historyData.filter(record => {
-                    if (fromDate && record.date < fromDate) return false;
-                    if (toDate && record.date > toDate) return false;
+                if (!startDate && !endDate) return history;
+                return history.filter(item => {
+                    const itemDate = item.date;
+                    if (startDate && itemDate < startDate) return false;
+                    if (endDate && itemDate > endDate) return false;
                     return true;
                 });
-            }, [historyData, fromDate, toDate]);
+            }, [history, startDate, endDate]);
 
-            // Aggregated sum for date range
-            const historyTotals = useMemo(() => {
-                let grandTotal = 0;
-                const fundTotalsMap = {};
-                if (activeProfile && activeProfile.funds) {
-                    activeProfile.funds.forEach(f => {
-                        fundTotalsMap[f.id] = { 
-                            id: f.id,
-                            name: f.name, 
-                            amount: 0, 
-                            color: f.color 
-                        };
-                    });
-                }
+            // Aggregated Totals strictly for EXISTING ACTIVE FUNDS
+            const historyAggregatedData = useMemo(() => {
+                let grandTotalIncome = 0;
                 
-                let deletedFundsAmount = 0;
+                // Initialize map for exact active funds
+                const fundTotalsMap = {};
+                funds.forEach(f => {
+                    fundTotalsMap[f.id] = {
+                        id: f.id,
+                        name: f.name,
+                        bankInfo: f.bankInfo,
+                        color: f.color,
+                        totalAmount: 0
+                    };
+                });
 
-                filteredHistory.forEach(record => {
-                    grandTotal += (Number(record.totalIncome) || 0);
-                    
-                    if (record.allocations && Array.isArray(record.allocations)) {
-                        record.allocations.forEach((alloc, index) => {
-                            let amt = Number(alloc.amount) || 0;
-                            let matched = false;
+                let legacyTotal = 0;
 
+                filteredHistory.forEach(rec => {
+                    grandTotalIncome += (Number(rec.totalIncome) || 0);
+                    if (Array.isArray(rec.allocations)) {
+                        rec.allocations.forEach(alloc => {
                             if (fundTotalsMap[alloc.fundId]) {
-                                fundTotalsMap[alloc.fundId].amount += amt;
-                                matched = true;
+                                fundTotalsMap[alloc.fundId].totalAmount += (Number(alloc.amount) || 0);
                             } else {
-                                const matchByName = activeProfile?.funds?.find(f => f.name === alloc.fundName);
-                                if (matchByName && fundTotalsMap[matchByName.id]) {
-                                    fundTotalsMap[matchByName.id].amount += amt;
-                                    matched = true;
+                                // Try fallback matching by name
+                                const matched = funds.find(f => f.name === alloc.fundName);
+                                if (matched && fundTotalsMap[matched.id]) {
+                                    fundTotalsMap[matched.id].totalAmount += (Number(alloc.amount) || 0);
+                                } else {
+                                    legacyTotal += (Number(alloc.amount) || 0);
                                 }
-                            }
-
-                            if (!matched && activeProfile?.funds && activeProfile.funds[index]) {
-                                const fallbackFund = activeProfile.funds[index];
-                                if (fundTotalsMap[fallbackFund.id]) {
-                                    fundTotalsMap[fallbackFund.id].amount += amt;
-                                    matched = true;
-                                }
-                            }
-
-                            if (!matched) {
-                                deletedFundsAmount += amt;
                             }
                         });
                     }
                 });
 
-                const fundTotalsArray = activeProfile && activeProfile.funds 
-                    ? activeProfile.funds.map(f => fundTotalsMap[f.id])
-                    : [];
+                const activeFundList = funds.map(f => fundTotalsMap[f.id]);
 
-                return { 
-                    grandTotal, 
-                    fundTotals: fundTotalsArray, 
-                    deletedFundsAmount 
-                };
-            }, [filteredHistory, activeProfile]);
-
-            useEffect(() => {
-                if (tempImage && imageRef.current) {
-                    if (cropperRef.current) {
-                        cropperRef.current.destroy();
-                    }
-                    cropperRef.current = new Cropper(imageRef.current, {
-                        aspectRatio: cropAspectRatio,
-                        viewMode: 1,
-                        background: false,
-                        autoCropArea: 0.9,
-                        responsive: true,
+                // Append legacy total if old funds were deleted
+                if (legacyTotal > 0) {
+                    activeFundList.push({
+                        id: 'legacy_other',
+                        name: 'Quỹ cũ/Khác',
+                        bankInfo: 'Dữ liệu trước',
+                        color: '#6b7280',
+                        totalAmount: legacyTotal
                     });
                 }
-                return () => {
-                    if (cropperRef.current) {
-                        cropperRef.current.destroy();
-                        cropperRef.current = null;
-                    }
+
+                return {
+                    grandTotalIncome,
+                    count: filteredHistory.length,
+                    activeFundList
                 };
-            }, [tempImage, cropAspectRatio]);
+            }, [filteredHistory, funds]);
 
-            const saveStateForUndo = (currentProfiles, currentHistory, currentActiveId) => {
-                setUndoStack(prev => {
-                    const newStack = [
-                        ...prev, 
-                        {
-                            profiles: JSON.parse(JSON.stringify(currentProfiles)),
-                            historyData: JSON.parse(JSON.stringify(currentHistory)),
-                            activeProfileId: currentActiveId
-                        }
-                    ];
-                    return newStack.slice(-20);
-                });
+            const moveFundOrder = (index, direction) => {
+                saveSnapshotForUndo('Thay đổi thứ tự quỹ');
+                const newFunds = [...funds];
+                const targetIndex = index + direction;
+                if (targetIndex < 0 || targetIndex >= newFunds.length) return;
+                const temp = newFunds[index];
+                newFunds[index] = newFunds[targetIndex];
+                newFunds[targetIndex] = temp;
+                setFunds(newFunds);
             };
 
-            const handleUndo = () => {
-                if (undoStack.length === 0) return;
-                const lastState = undoStack[undoStack.length - 1];
-                setProfiles(lastState.profiles);
-                setHistoryData(lastState.historyData);
-                setActiveProfileId(lastState.activeProfileId);
-                setUndoStack(prev => prev.slice(0, -1));
-                showToast("Đã hoàn tác hành động");
+            const handleUpdateFundConfig = (id, field, value) => {
+                saveSnapshotForUndo('Cập nhật cài đặt quỹ');
+                setFunds(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
             };
 
-            const handleDeleteHistory = (id) => {
-                saveStateForUndo(profiles, historyData, activeProfileId);
-                setHistoryData(historyData.filter(h => h.id !== id));
-                showToast('Đã xóa bản ghi lịch sử');
-            };
-
-            const handleCreateProfile = () => {
-                if (!newProfileName.trim()) {
-                    showToast('Vui lòng nhập tên giao diện!');
-                    return;
-                }
-                saveStateForUndo(profiles, historyData, activeProfileId);
-                const newProf = {
-                    id: 'profile-' + Date.now(),
-                    name: newProfileName.trim(),
-                    funds: [
-                        { id: Date.now().toString(), name: 'Quỹ Chi Tiêu Chính', type: 'percent', percent: 100, vndAmount: 0, color: themeColor }
-                    ]
-                };
-                setProfiles([...profiles, newProf]);
-                setActiveProfileId(newProf.id);
-                setNewProfileName('');
-                setShowNewProfileModal(false);
-                showToast(`Đã tạo và chuyển sang: ${newProf.name}`);
-            };
-
-            const handleUpdateFund = (fundId, field, value) => {
-                const updatedFunds = activeProfile.funds.map(f => {
-                    if (f.id === fundId) {
-                        return { ...f, [field]: value };
-                    }
-                    return f;
-                });
-                setProfiles(profiles.map(p => p.id === activeProfile.id ? { ...p, funds: updatedFunds } : p));
-            };
-
-            const handleAddFundToProfile = () => {
-                saveStateForUndo(profiles, historyData, activeProfileId);
+            const handleAddNewFund = () => {
+                saveSnapshotForUndo('Thêm quỹ mới');
                 const newFund = {
-                    id: Date.now().toString(),
-                    name: `Quỹ mới ${activeProfile.funds.length + 1}`,
+                    id: 'f_' + Date.now(),
+                    name: 'Quỹ Mới',
+                    bankInfo: 'Nguồn khác',
                     type: 'percent',
-                    percent: 0,
-                    vndAmount: 0,
-                    color: COLOR_PRESETS[activeProfile.funds.length % COLOR_PRESETS.length].hex
+                    percent: 10,
+                    vndAmount: 100000,
+                    color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')
                 };
-                const updatedFunds = [...activeProfile.funds, newFund];
-                setProfiles(profiles.map(p => p.id === activeProfile.id ? { ...p, funds: updatedFunds } : p));
-                showToast('Đã thêm ô quỹ mới');
+                setFunds(prev => [...prev, newFund]);
+                showToast('Đã thêm quỹ mới!');
             };
 
-            const handleDeleteFundFromProfile = (fundId) => {
-                if (activeProfile.funds.length <= 1) {
-                    showToast('Giao diện phải có ít nhất 1 ô quỹ!');
+            const handleDeleteFund = (id) => {
+                if (funds.length <= 1) {
+                    showToast('Phải giữ lại ít nhất 1 quỹ!', 'warning');
                     return;
                 }
-                saveStateForUndo(profiles, historyData, activeProfileId);
-                const updatedFunds = activeProfile.funds.filter(f => f.id !== fundId);
-                setProfiles(profiles.map(p => p.id === activeProfile.id ? { ...p, funds: updatedFunds } : p));
-                showToast('Đã xóa ô quỹ');
-            };
-
-            const handleMoveFund = (fromIndex, toIndex) => {
-                if (toIndex < 0 || toIndex >= activeProfile.funds.length) return;
-                saveStateForUndo(profiles, historyData, activeProfileId);
-                const updatedFunds = [...activeProfile.funds];
-                const [movedItem] = updatedFunds.splice(fromIndex, 1);
-                updatedFunds.splice(toIndex, 0, movedItem);
-                setProfiles(profiles.map(p => p.id === activeProfile.id ? { ...p, funds: updatedFunds } : p));
-                showToast('Đã thay đổi thứ tự các quỹ');
-            };
-
-            const handleDragStart = (e, index) => {
-                setDraggedFundIndex(index);
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/html", e.target.parentNode);
-            };
-
-            const handleDragOver = (e, index) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                if (dragOverFundIndex !== index) {
-                    setDragOverFundIndex(index);
-                }
-            };
-
-            const handleDrop = (e, index) => {
-                e.preventDefault();
-                if (draggedFundIndex !== null && draggedFundIndex !== index) {
-                    handleMoveFund(draggedFundIndex, index);
-                }
-                setDraggedFundIndex(null);
-                setDragOverFundIndex(null);
-            };
-
-            const handleImageSelect = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        setTempImage(reader.result);
-                    };
-                    reader.readAsDataURL(file);
-                }
-            };
-
-            const handleApplyCrop = () => {
-                if (cropperRef.current) {
-                    const croppedCanvas = cropperRef.current.getCroppedCanvas({
-                        maxWidth: 1920,
-                        maxHeight: 1080,
-                    });
-                    if (croppedCanvas) {
-                        const croppedDataUrl = croppedCanvas.toDataURL('image/jpeg', 0.85);
-                        setBgImage(croppedDataUrl);
-                        setTempImage(null);
-                        showToast('Đã áp dụng ảnh nền thành công!');
-                    }
-                }
-            };
-
-            const handleExportData = () => {
-                const data = { profiles, historyData, themeColor, glassOpacity, glassBlur, rules };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `JFF_Financial_Backup_${currentTZDate}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('Đã tải xuống tệp sao lưu dữ liệu!');
-            };
-
-            const handleImportData = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const imported = JSON.parse(event.target.result);
-                        if (imported.profiles) setProfiles(imported.profiles);
-                        if (imported.historyData) setHistoryData(imported.historyData);
-                        if (imported.themeColor) setThemeColor(imported.themeColor);
-                        if (imported.glassOpacity) setGlassOpacity(imported.glassOpacity);
-                        if (imported.glassBlur) setGlassBlur(imported.glassBlur);
-                        if (imported.rules) setRules(imported.rules);
-                        showToast('Đã khôi phục dữ liệu thành công!');
-                    } catch (err) {
-                        showToast('Tệp sao lưu không đúng định dạng!');
-                    }
-                };
-                reader.readAsText(file);
-            };
-
-            const handleAddRule = () => {
-                const newRule = {
-                    id: Date.now().toString(),
-                    title: 'Tiêu đề quy tắc mới',
-                    content: 'Nội dung chi tiết của quy tắc...',
-                    color: COLOR_PRESETS[rules.length % COLOR_PRESETS.length].hex
-                };
-                setRules([...rules, newRule]);
-                setEditingRuleId(newRule.id);
-                setTempRule(newRule);
-            };
-
-            const handleEditRule = (rule) => {
-                setEditingRuleId(rule.id);
-                setTempRule(rule);
-            };
-
-            const handleSaveRule = () => {
-                setRules(rules.map(r => r.id === tempRule.id ? tempRule : r));
-                setEditingRuleId(null);
-                setTempRule(null);
-                showToast('Đã lưu quy tắc');
-            };
-
-            const handleDeleteRule = (id) => {
-                setRules(rules.filter(r => r.id !== id));
-                showToast('Đã xóa quy tắc');
+                saveSnapshotForUndo('Xóa quỹ');
+                setFunds(prev => prev.filter(f => f.id !== id));
+                showToast('Đã xóa quỹ!');
             };
 
             return (
-                <div 
-                    className="min-h-screen relative pb-28 text-slate-100"
-                    style={{
-                        backgroundImage: bgImage ? `url(${bgImage})` : 'none',
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        backgroundAttachment: 'fixed',
-                    }}
-                >
-                    <style>{`
-                        .glass-card {
-                            background-color: rgba(15, 23, 42, ${glassOpacity / 100});
-                            backdrop-filter: blur(${glassBlur}px);
-                            -webkit-backdrop-filter: blur(${glassBlur}px);
-                            border: 1px solid rgba(255, 255, 255, 0.12);
-                        }
-                    `}</style>
-
-                    {bgImage && <div className="fixed inset-0 bg-slate-950/50 pointer-events-none z-0" />}
-
-                    {/* App Header */}
-                    <header className="relative z-10 sticky top-0 bg-slate-950/80 backdrop-blur-md border-b border-white/10 px-4 py-3 shadow-lg">
-                        <div className="max-w-5xl mx-auto flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                                <div 
-                                    className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg transition-transform hover:scale-105 shrink-0"
-                                    style={{ backgroundColor: themeColor }}
-                                >
+                <div className="max-w-md mx-auto w-full pb-24 pt-4 px-4 min-h-screen flex flex-col justify-between">
+                    {/* Header */}
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-cyan-500/30">
                                     J
                                 </div>
                                 <div>
-                                    <h1 className="font-extrabold text-base tracking-wide text-white flex items-center gap-2">
-                                        JFF <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 border border-white/10 font-medium text-slate-300 hidden sm:inline-block">Tự Do Tài Chính</span>
-                                    </h1>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <p className="text-[11px] text-slate-400 truncate max-w-[120px] sm:max-w-xs">{activeProfile.name}</p>
-                                        <span className="text-[10px] text-slate-300 bg-slate-800/80 px-1.5 py-0.5 rounded border border-white/10 font-mono tracking-wider">{realTime}</span>
-                                    </div>
+                                    <h1 className="font-extrabold text-lg text-white tracking-tight">Jiro Financial</h1>
+                                    <p className="text-xs text-cyan-400 font-medium">Tự Do Tài Chính</p>
                                 </div>
                             </div>
-
-                            <button
-                                onClick={() => setShowSettings(true)}
-                                className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all active:scale-95 shadow-md"
-                                title="Cài Đặt"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                            </button>
-                        </div>
-                    </header>
-
-                    {/* Navigation Bar */}
-                    <main className="relative z-10 max-w-5xl mx-auto px-4 mt-4 space-y-5">
-                        <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-white/10 shadow-lg backdrop-blur-md overflow-x-auto">
-                            <button
-                                onClick={() => setActiveTab('input')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
-                                    activeTab === 'input' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
-                                }`}
-                                style={activeTab === 'input' ? { backgroundColor: themeColor } : {}}
-                            >
-                                <span>Nhập Liệu</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('config')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
-                                    activeTab === 'config' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
-                                }`}
-                                style={activeTab === 'config' ? { backgroundColor: themeColor } : {}}
-                            >
-                                <span>Cấu Hình Quỹ</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('history')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
-                                    activeTab === 'history' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
-                                }`}
-                                style={activeTab === 'history' ? { backgroundColor: themeColor } : {}}
-                            >
-                                <span>Lịch Sử</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('rules')}
-                                className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center ${
-                                    activeTab === 'rules' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
-                                }`}
-                                style={activeTab === 'rules' ? { backgroundColor: themeColor } : {}}
-                            >
-                                <span>Quy Tắc</span>
-                            </button>
+                            
+                            {/* Reset Month Quick Filter Notification */}
+                            <div className="text-right">
+                                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700">
+                                    <i className="fa-solid fa-clock text-cyan-400"></i>
+                                    {getTodayDateStr()}
+                                </span>
+                            </div>
                         </div>
 
-                        {/* TAB 1: INPUT & ALLOCATION CALCULATOR */}
+                        {/* Toast Notification */}
+                        {toastMessage && (
+                            <div className={`mb-4 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all animate-bounce shadow-lg ${
+                                toastMessage.type === 'warning' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                toastMessage.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                            }`}>
+                                <i className="fa-solid fa-circle-info"></i>
+                                <span>{toastMessage.msg}</span>
+                            </div>
+                        )}
+
+                        {}
                         {activeTab === 'input' && (
-                            <div className="space-y-6">
-                                <div className="glass-card rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h2 className="font-extrabold text-base text-white">
-                                            Nhập Số Tiền Thu Nhập Mới
-                                        </h2>
-                                        <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/10 text-slate-300 border border-white/10">
-                                            {activeProfile.name}
-                                        </span>
-                                    </div>
-
-                                    <div className="relative">
-                                        <input
+                            <div className="space-y-5 animate-fadeIn">
+                                {/* Income Card */}
+                                <div className="glass-panel p-5 rounded-2xl relative overflow-hidden glow-effect">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                                    <label className="block text-xs font-medium text-cyan-300 mb-1.5 uppercase tracking-wider">
+                                        Nhập Tổng Thu Nhập
+                                    </label>
+                                    <div className="relative flex items-center">
+                                        <input 
                                             type="text"
-                                            inputMode="text"
-                                            value={incomeInput}
-                                            onChange={(e) => setIncomeInput(formatVNDInput(e.target.value))}
+                                            inputMode="numeric"
                                             placeholder="0"
-                                            className="w-full bg-slate-900/90 text-white font-extrabold text-lg sm:text-2xl px-4 py-3.5 rounded-2xl border border-white/15 focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-500"
+                                            value={totalIncomeInput}
+                                            onChange={handleIncomeChange}
+                                            className="w-full bg-slate-900/90 text-2xl font-black text-cyan-400 px-4 py-3 rounded-xl border border-cyan-500/30 focus:border-cyan-400 focus:outline-none transition-all placeholder-slate-600"
                                         />
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
-                                            VND
-                                        </div>
+                                        <span className="absolute right-4 text-cyan-500 font-bold text-lg">₫</span>
                                     </div>
 
-                                    {(incomeInput || Object.values(fundAdditions).some(v => v !== 0)) && (
-                                        <div className="flex justify-between items-center pt-1">
-                                            <span className="text-[11px] text-slate-400 font-medium">
-                                                Thu nhập: <strong className="text-slate-200">{incomeInput ? incomeInput : '0'} ₫</strong>
-                                                {configTotals.totalVndFixed > 0 && (
-                                                    <span className="ml-2 text-blue-400">(Trừ {formatVND(configTotals.totalVndFixed)} cố định)</span>
-                                                )}
-                                            </span>
-                                            <button
-                                                onClick={() => { setIncomeInput(''); setFundAdditions({}); }}
-                                                className="py-1.5 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-xs font-bold transition-all"
+                                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+                                        <span>Phân bổ cho: <strong className="text-white">{funds.length} quỹ</strong></span>
+                                        {Object.keys(overrides).length > 0 && (
+                                            <button 
+                                                onClick={() => {
+                                                    saveSnapshotForUndo('Xóa tất cả chốt thủ công');
+                                                    setOverrides({});
+                                                    showToast('Đã xóa tất cả chốt thủ công');
+                                                }}
+                                                className="text-amber-400 hover:text-amber-300 font-medium text-[11px] underline"
                                             >
-                                                Xóa nhập liệu
+                                                Đặt lại tất cả tự động
                                             </button>
-                                        </div>
-                                    )}
-
-                                    <div className="flex items-center justify-center p-3 rounded-xl bg-slate-900/50 border border-white/5">
-                                        <p className="text-[11px] font-medium text-slate-400 text-center leading-relaxed">
-                                            Số tiền này sẽ được tự động chia và <strong className="text-blue-400">lưu vào lịch sử khi qua 0:00 sáng</strong> ngày hôm sau. Không cần phải thao tác thủ công.
-                                        </p>
+                                        )}
                                     </div>
+                                </div>
+
+                                {/* Funds List */}
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center text-xs font-semibold text-slate-400 px-1">
+                                        <span>DANH SÁCH QUỸ</span>
+                                        <span className="text-[11px] text-slate-500">Chạm để chốt số tiền</span>
+                                    </div>
+
+                                    {calculatedAllocations.map((fund, idx) => (
+                                        <div 
+                                            key={fund.id}
+                                            className="glass-card p-3.5 rounded-xl flex items-center justify-between gap-3 hover:border-slate-600 transition-all group relative overflow-hidden"
+                                            style={{ borderLeft: `4px solid ${fund.color}` }}
+                                        >
+                                            {/* Reorder Buttons */}
+                                            <div className="flex flex-col gap-1 text-slate-500 text-xs">
+                                                <button 
+                                                    onClick={() => moveFundOrder(idx, -1)}
+                                                    disabled={idx === 0}
+                                                    className="hover:text-cyan-400 disabled:opacity-20 p-0.5"
+                                                    title="Di chuyển lên"
+                                                >
+                                                    <i className="fa-solid fa-chevron-up"></i>
+                                                </button>
+                                                <button 
+                                                    onClick={() => moveFundOrder(idx, 1)}
+                                                    disabled={idx === funds.length - 1}
+                                                    className="hover:text-cyan-400 disabled:opacity-20 p-0.5"
+                                                    title="Di chuyển xuống"
+                                                >
+                                                    <i className="fa-solid fa-chevron-down"></i>
+                                                </button>
+                                            </div>
+
+                                            {/* Fund Details */}
+                                            <div className="flex-1 min-w-0" onClick={() => openFundOverrideModal(fund, fund.finalAmount)}>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-sm text-slate-100 truncate">{fund.name}</span>
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/50">
+                                                        {fund.type === 'vnd' ? `${formatVNDPlain(fund.vndAmount)}đ` : `${fund.percent}%`}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-400 truncate mt-0.5">{fund.bankInfo}</p>
+                                            </div>
+
+                                            {/* Allocated Value & Override Badge */}
+                                            <div className="text-right cursor-pointer" onClick={() => openFundOverrideModal(fund, fund.finalAmount)}>
+                                                <div className="font-extrabold text-sm text-emerald-400">
+                                                    {formatVND(fund.finalAmount)}
+                                                </div>
+                                                {fund.isOverridden ? (
+                                                    <div className="flex items-center justify-end gap-1 mt-0.5">
+                                                        <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/30">
+                                                            Đã chốt
+                                                        </span>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                resetFundOverride(fund.id, fund.name);
+                                                            }}
+                                                            className="text-[10px] text-slate-400 hover:text-rose-400 p-0.5"
+                                                            title="Bỏ chốt"
+                                                        >
+                                                            <i className="fa-solid fa-xmark"></i>
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[10px] text-slate-500">Tự động</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {}
+                        {activeTab === 'config' && (
+                            <div className="space-y-4 animate-fadeIn">
+                                <div className="flex justify-between items-center mb-2">
+                                    <div>
+                                        <h2 className="text-base font-bold text-white">Cấu Hình Quỹ</h2>
+                                        <p className="text-xs text-slate-400">Thêm, sửa tỷ lệ hoặc số tiền cố định</p>
+                                    </div>
+                                    <button 
+                                        onClick={handleAddNewFund}
+                                        className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium text-xs flex items-center gap-1.5 shadow-md shadow-cyan-600/30"
+                                    >
+                                        <i className="fa-solid fa-plus"></i> Thêm Quỹ
+                                    </button>
                                 </div>
 
                                 <div className="space-y-3">
-                                    <div className="flex justify-between items-center px-1">
-                                        <h3 className="font-extrabold text-xs uppercase text-slate-300 tracking-wider flex items-center gap-2">
-                                            Phân Bổ Thu Nhập 
-                                            <span className="text-[10px] text-slate-400 font-normal normal-case">(Kéo thả hoặc bấm ▲▼ để đổi thứ tự)</span>
-                                        </h3>
-                                        <div className="flex items-center space-x-2 text-xs font-bold">
-                                            {configTotals.totalVndFixed > 0 && (
-                                                <span className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                                                    Cố định: {formatVND(configTotals.totalVndFixed)}
-                                                </span>
-                                            )}
-                                            <span className={`${configTotals.totalPercent === 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                                % Còn lại: {configTotals.totalPercent}%
-                                            </span>
-                                        </div>
-                                    </div>
+                                    {funds.map((f, i) => (
+                                        <div key={f.id} className="glass-panel p-3.5 rounded-xl space-y-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 flex-1">
+                                                    <input 
+                                                        type="color" 
+                                                        value={f.color || '#3b82f6'} 
+                                                        onChange={(e) => handleUpdateFundConfig(f.id, 'color', e.target.value)}
+                                                        className="w-6 h-6 rounded border-0 bg-transparent cursor-pointer"
+                                                    />
+                                                    <input 
+                                                        type="text" 
+                                                        value={f.name}
+                                                        onChange={(e) => handleUpdateFundConfig(f.id, 'name', e.target.value)}
+                                                        className="bg-slate-900 border border-slate-700 text-white font-bold text-sm px-2.5 py-1 rounded-lg w-full focus:outline-none focus:border-cyan-500"
+                                                        placeholder="Tên quỹ"
+                                                    />
+                                                </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                                        {currentAllocations.map((fundAlloc, index) => {
-                                            const isDragging = draggedFundIndex === index;
-                                            const isDragOver = dragOverFundIndex === index;
-
-                                            return (
-                                                <div 
-                                                    key={fundAlloc.id}
-                                                    draggable={true}
-                                                    onDragStart={(e) => handleDragStart(e, index)}
-                                                    onDragOver={(e) => handleDragOver(e, index)}
-                                                    onDrop={(e) => handleDrop(e, index)}
-                                                    className={`glass-card rounded-2xl p-3.5 transition-all cursor-pointer hover:shadow-lg relative group ${
-                                                        isDragging ? 'drag-ghost border-dashed border-blue-400' : ''
-                                                    } ${isDragOver ? 'ring-2 ring-blue-400 bg-blue-900/30' : ''}`}
-                                                    style={{ borderLeft: `5px solid ${fundAlloc.color || themeColor}` }}
+                                                <button 
+                                                    onClick={() => handleDeleteFund(f.id)}
+                                                    className="text-slate-500 hover:text-rose-400 p-1 text-sm"
+                                                    title="Xóa quỹ"
                                                 >
-                                                    <div className="flex items-center gap-2">
-                                                        {/* Drag handle & Move up/down buttons */}
-                                                        <div className="flex flex-col items-center justify-center pr-2 border-r border-white/10 select-none">
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => { e.stopPropagation(); handleMoveFund(index, index - 1); }}
-                                                                disabled={index === 0}
-                                                                className="text-slate-500 hover:text-white disabled:opacity-20 p-0.5"
-                                                                title="Di chuyển lên"
-                                                            >
-                                                                ▲
-                                                            </button>
-                                                            <div className="text-slate-500 cursor-grab active:cursor-grabbing p-0.5" title="Giữ kéo thả">
-                                                                ⋮⋮
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => { e.stopPropagation(); handleMoveFund(index, index + 1); }}
-                                                                disabled={index === currentAllocations.length - 1}
-                                                                className="text-slate-500 hover:text-white disabled:opacity-20 p-0.5"
-                                                                title="Di chuyển xuống"
-                                                            >
-                                                                ▼
-                                                            </button>
-                                                        </div>
+                                                    <i className="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            </div>
 
-                                                        {/* Main Fund Card Content */}
-                                                        <div 
-                                                            className="flex-1 space-y-1.5"
-                                                            onClick={() => {
-                                                                setActiveFundForManual(fundAlloc);
-                                                                // Pre-fill input with target total allocated amount so editing is intuitive
-                                                                setManualAmountInput(formatVNDInput(fundAlloc.totalAllocated.toString()));
-                                                            }}
-                                                        >
-                                                            <div className="flex justify-between items-center gap-2">
-                                                                <h4 className="font-extrabold text-sm text-white truncate flex items-center gap-1.5">
-                                                                    <span>{fundAlloc.name}</span>
-                                                                    {fundAlloc.type === 'vnd' ? (
-                                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono font-bold border border-blue-500/30">
-                                                                            Cố định
-                                                                        </span>
-                                                                    ) : null}
-                                                                </h4>
-                                                                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/10 text-slate-200 shrink-0">
-                                                                    {fundAlloc.type === 'vnd' 
-                                                                        ? formatVND(fundAlloc.vndAmount) 
-                                                                        : `${fundAlloc.percent}%`
-                                                                    }
-                                                                </span>
-                                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div>
+                                                    <label className="text-slate-400 text-[10px] block mb-1">Thông tin TK/Mô tả</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={f.bankInfo}
+                                                        onChange={(e) => handleUpdateFundConfig(f.id, 'bankInfo', e.target.value)}
+                                                        className="bg-slate-900 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-lg w-full focus:outline-none focus:border-cyan-500"
+                                                        placeholder="VÍ dụ: MBB 0001"
+                                                    />
+                                                </div>
 
-                                                            <div className="flex justify-between items-end">
-                                                                <span className="text-[10px] text-slate-400 font-medium opacity-60 group-hover:opacity-100 transition-opacity">
-                                                                    Nhấn để chỉnh sửa số tiền chốt
-                                                                </span>
-                                                                <div className="text-right">
-                                                                    {fundAlloc.extra !== 0 && (
-                                                                        <span className={`text-[10px] font-bold block mb-0.5 ${fundAlloc.extra > 0 ? 'text-amber-400' : 'text-red-400'}`}>
-                                                                            ({fundAlloc.extra > 0 ? '+' : ''}{formatVND(fundAlloc.extra)} điều chỉnh)
-                                                                        </span>
-                                                                    )}
-                                                                    <span className="text-base font-black text-emerald-400">
-                                                                        {formatVND(fundAlloc.totalAllocated)}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
+                                                <div>
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <label className="text-slate-400 text-[10px]">Đơn vị tính</label>
+                                                        <div className="flex text-[10px] border border-slate-700 rounded overflow-hidden">
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => handleUpdateFundConfig(f.id, 'type', 'percent')}
+                                                                className={`px-1.5 py-0.5 ${f.type === 'percent' ? 'bg-cyan-600 text-white font-bold' : 'bg-slate-800 text-slate-400'}`}
+                                                            >
+                                                                %
+                                                            </button>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => handleUpdateFundConfig(f.id, 'type', 'vnd')}
+                                                                className={`px-1.5 py-0.5 ${f.type === 'vnd' ? 'bg-cyan-600 text-white font-bold' : 'bg-slate-800 text-slate-400'}`}
+                                                            >
+                                                                ₫
+                                                            </button>
                                                         </div>
                                                     </div>
+
+                                                    {f.type === 'percent' ? (
+                                                        <div className="relative flex items-center">
+                                                            <input 
+                                                                type="number" 
+                                                                value={f.percent}
+                                                                onChange={(e) => handleUpdateFundConfig(f.id, 'percent', Number(e.target.value) || 0)}
+                                                                className="bg-slate-900 border border-slate-700 text-cyan-400 font-bold text-xs px-2.5 py-1 rounded-lg w-full focus:outline-none focus:border-cyan-500 pr-6"
+                                                            />
+                                                            <span className="absolute right-2 text-slate-500 text-xs">%</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="relative flex items-center">
+                                                            <input 
+                                                                type="text" 
+                                                                value={formatVNDPlain(f.vndAmount)}
+                                                                onChange={(e) => handleUpdateFundConfig(f.id, 'vndAmount', parseVNDInput(e.target.value))}
+                                                                className="bg-slate-900 border border-slate-700 text-cyan-400 font-bold text-xs px-2 py-1 rounded-lg w-full focus:outline-none focus:border-cyan-500 pr-5"
+                                                            />
+                                                            <span className="absolute right-1.5 text-slate-500 text-[10px]">₫</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* TAB 2: FUND CONFIGURATION */}
-                        {activeTab === 'config' && (
-                            <div className="space-y-6">
-                                <div className="glass-card rounded-3xl p-5 shadow-2xl space-y-4">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                                        <div>
-                                            <h2 className="font-extrabold text-base text-white">Cấu Hình Ô Quỹ & Đơn Vị (VND / %)</h2>
-                                            <p className="text-xs text-slate-400">Thiết lập quỹ cố định theo số tiền VND hoặc chia theo tỷ lệ phần trăm</p>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {configTotals.totalVndFixed > 0 && (
-                                                <div className="px-3 py-1 rounded-xl font-bold text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                                                    Tổng VND cố định: {formatVND(configTotals.totalVndFixed)}
-                                                </div>
-                                            )}
-                                            <div className={`px-3 py-1 rounded-xl font-bold text-xs border ${
-                                                configTotals.totalPercent === 100 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                            }`}>
-                                                % Còn lại: {configTotals.totalPercent} / 100%
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-slate-900/60 border border-white/10 p-3.5 rounded-2xl text-xs text-slate-300 space-y-1">
-                                        <p className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">💡 Logic Chia Thu Nhập Mới:</p>
-                                        <p className="leading-relaxed">
-                                            <strong>Bước 1:</strong> Trừ trực tiếp số tiền của các quỹ đơn vị <span className="text-blue-300 font-bold">VND</span>.
-                                            <br />
-                                            <strong>Bước 2:</strong> Số tiền thu nhập còn lại sẽ được chia đều cho các quỹ có đơn vị <span className="text-emerald-300 font-bold">% Phần Trăm</span>.
-                                        </p>
-                                    </div>
-
-                                    {configTotals.totalPercent !== 100 && (
-                                        <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl text-xs text-amber-300 font-medium">
-                                            Cảnh báo: Tổng phần trăm các quỹ còn lại là <strong>{configTotals.totalPercent}%</strong>. Hãy điều chỉnh để tổng vừa đủ <strong>100%</strong> nhé!
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-3 pt-2">
-                                        {activeProfile.funds.map((fund, index) => (
-                                            <div key={fund.id} className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-3">
-                                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                                                    {/* Name input */}
-                                                    <div className="sm:col-span-5">
-                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tên ô quỹ #{index + 1}</label>
-                                                        <input
-                                                            type="text"
-                                                            value={fund.name}
-                                                            onChange={(e) => handleUpdateFund(fund.id, 'name', e.target.value)}
-                                                            className="w-full bg-slate-950 text-white font-bold text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                                        />
-                                                    </div>
-
-                                                    {/* Unit Type Toggle (% vs VND) */}
-                                                    <div className="sm:col-span-3">
-                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Đơn vị tính</label>
-                                                        <div className="flex bg-slate-950 p-1 rounded-xl border border-white/10">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleUpdateFund(fund.id, 'type', 'percent')}
-                                                                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                                                                    fund.type !== 'vnd' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                                                                }`}
-                                                            >
-                                                                % Phần Trăm
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleUpdateFund(fund.id, 'type', 'vnd')}
-                                                                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                                                                    fund.type === 'vnd' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                                                                }`}
-                                                            >
-                                                                ₫ VND
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Amount or Percent Value input */}
-                                                    <div className="sm:col-span-2">
-                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                                                            {fund.type === 'vnd' ? 'Số tiền (VND)' : 'Tỷ lệ (%)'}
-                                                        </label>
-                                                        {fund.type === 'vnd' ? (
-                                                            <input
-                                                                type="text"
-                                                                value={formatVNDInput(fund.vndAmount)}
-                                                                onChange={(e) => handleUpdateFund(fund.id, 'vndAmount', parseFormattedNumber(e.target.value))}
-                                                                placeholder="0"
-                                                                className="w-full bg-slate-950 text-emerald-400 font-extrabold text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                                            />
-                                                        ) : (
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                max="100"
-                                                                value={fund.percent}
-                                                                onChange={(e) => handleUpdateFund(fund.id, 'percent', Number(e.target.value))}
-                                                                className="w-full bg-slate-950 text-blue-400 font-extrabold text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                                            />
-                                                        )}
-                                                    </div>
-
-                                                    {/* Color & Action Buttons */}
-                                                    <div className="sm:col-span-2 flex items-center space-x-2 pt-1 sm:pt-4">
-                                                        <input
-                                                            type="color"
-                                                            value={fund.color || themeColor}
-                                                            onChange={(e) => handleUpdateFund(fund.id, 'color', e.target.value)}
-                                                            className="w-9 h-9 rounded-xl bg-slate-950 border border-white/10 cursor-pointer p-0.5 shrink-0"
-                                                            title="Đổi màu viền ô quỹ"
-                                                        />
-                                                        <button
-                                                            onClick={() => handleDeleteFundFromProfile(fund.id)}
-                                                            className="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all text-xs font-bold"
-                                                            title="Xóa ô quỹ này"
-                                                        >
-                                                            Xóa
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <button
-                                        onClick={handleAddFundToProfile}
-                                        className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-dashed border-white/20 text-slate-200 font-bold text-xs uppercase transition-all flex items-center justify-center"
-                                    >
-                                        <span>+ Thêm Ô Quỹ Mới</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* TAB 3: HISTORY & DATE RANGE SEARCH */}
+                        {}
                         {activeTab === 'history' && (
-                            <div className="space-y-6">
-                                <div className="glass-card rounded-3xl p-5 shadow-2xl space-y-4">
-                                    <div>
-                                        <h2 className="font-extrabold text-base text-white">Lịch Sử Phân Bổ Tài Chính</h2>
-                                        <p className="text-xs text-slate-400">Tra cứu chi tiết và tổng hợp số tiền theo khoảng thời gian</p>
+                            <div className="space-y-4 animate-fadeIn">
+                                {/* Date Search Filters */}
+                                <div className="glass-panel p-4 rounded-xl space-y-3">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[11px] font-semibold text-slate-300 mb-1 block uppercase">Từ ngày</label>
+                                            <input 
+                                                type="date" 
+                                                value={startDate}
+                                                onChange={(e) => setStartDate(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-2.5 py-2 rounded-lg focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-semibold text-slate-300 mb-1 block uppercase">Đến ngày</label>
+                                            <input 
+                                                type="date" 
+                                                value={endDate}
+                                                onChange={(e) => setEndDate(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-2.5 py-2 rounded-lg focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-white/10 items-end">
-                                        <div>
-                                            <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Từ ngày</label>
-                                            <input
-                                                type="date"
-                                                value={fromDate}
-                                                onChange={(e) => setFromDate(e.target.value)}
-                                                className="w-full bg-slate-900/90 text-white text-xs px-3 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[11px] font-bold text-slate-300 uppercase block mb-1">Đến ngày</label>
-                                            <input
-                                                type="date"
-                                                value={toDate}
-                                                onChange={(e) => setToDate(e.target.value)}
-                                                className="w-full bg-slate-900/90 text-white text-xs px-3 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                            />
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <button 
-                                                onClick={() => {
-                                                    showToast('Đã tra cứu dữ liệu theo khoảng thời gian!');
-                                                }}
-                                                className="flex-1 py-2.5 px-4 text-xs font-bold text-white rounded-xl shadow-lg transition-all"
-                                                style={{ backgroundColor: themeColor }}
-                                            >
-                                                Tra Cứu
-                                            </button>
-                                            <button 
-                                                onClick={() => { 
-                                                    const tzDateObj = getTZDate(gmtOffset);
-                                                    setFromDate(formatFirstDayOfMonth(tzDateObj)); 
-                                                    setToDate(formatTZDate(tzDateObj)); 
-                                                }}
-                                                className="py-2.5 px-3 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl border border-red-500/20 transition-all shrink-0"
-                                                title="Đặt lại về tháng hiện tại"
-                                            >
-                                                Tháng này
-                                            </button>
-                                        </div>
+                                    <div className="flex gap-2 pt-1">
+                                        <button 
+                                            onClick={() => {
+                                                // Reset filter to month-to-date
+                                                setStartDate(getFirstDayOfMonthStr());
+                                                setEndDate(getTodayDateStr());
+                                                showToast('Đã chuyển về tra cứu Tháng Hiện Tại');
+                                            }}
+                                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1"
+                                        >
+                                            <i className="fa-solid fa-calendar-day text-cyan-400"></i> Tháng này
+                                        </button>
+                                        <button 
+                                            onClick={() => showToast(`Đã tra cứu ${filteredHistory.length} bản ghi`)}
+                                            className="flex-1 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-lg shadow-md shadow-cyan-600/20 flex items-center justify-center gap-1.5"
+                                        >
+                                            <i className="fa-solid fa-magnifying-glass"></i> Tra Cứu
+                                        </button>
                                     </div>
                                 </div>
 
-                                {filteredHistory.length > 0 && (
-                                    <div className="glass-card rounded-3xl p-5 shadow-xl space-y-4 border border-blue-500/20 bg-blue-950/20">
-                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-3 gap-2">
-                                            <div>
-                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Thống kê tổng hợp trong khoảng thời gian</span>
-                                                <h3 className="font-extrabold text-lg text-white">
-                                                    Tổng Thu Nhập Tất Cả Các Quỹ: <span className="text-emerald-400 font-black">{formatVND(historyTotals.grandTotal)}</span>
-                                                </h3>
-                                            </div>
-                                            <span className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/10 text-slate-300 border border-white/10">
-                                                {filteredHistory.length} lần ghi nhận
+                                {/* Summary Statistics Card */}
+                                <div className="glass-panel p-4 rounded-xl border border-cyan-500/20 space-y-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">THỐNG KÊ TỔNG HỢP TRONG KHOẢNG THỜI GIAN</p>
+                                        <div className="flex items-baseline justify-between mt-1">
+                                            <h3 className="text-xl font-black text-cyan-400">
+                                                {formatVND(historyAggregatedData.grandTotalIncome)}
+                                            </h3>
+                                            <span className="text-xs bg-cyan-950/80 border border-cyan-800/50 text-cyan-300 px-2 py-0.5 rounded-full font-medium">
+                                                {historyAggregatedData.count} lần ghi nhận
                                             </span>
                                         </div>
+                                    </div>
 
-                                        <div>
-                                            <h4 className="text-xs font-bold text-slate-300 uppercase mb-2">Tổng số tiền chi tiết của từng quỹ:</h4>
-                                            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                                                {historyTotals.fundTotals.map((fundData) => (
-                                                    <div key={fundData.id} className="bg-slate-900/90 p-2 rounded-xl border border-white/10 space-y-1 shadow-sm flex flex-col justify-center" style={{ borderLeft: `3px solid ${fundData.color || themeColor}` }}>
-                                                        <span className="text-[10px] font-bold text-slate-400 truncate block" title={fundData.name}>{fundData.name}</span>
-                                                        <span className="text-[11px] font-black block truncate" style={{ color: fundData.color || themeColor }} title={formatVND(fundData.amount)}>
-                                                            {formatVND(fundData.amount)}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                                {historyTotals.deletedFundsAmount !== 0 && (
-                                                    <div className="bg-slate-900/90 p-2 rounded-xl border border-white/10 space-y-1 shadow-sm flex flex-col justify-center" style={{ borderLeft: `3px solid #64748b` }}>
-                                                        <span className="text-[10px] font-bold text-slate-400 truncate block" title="Quỹ cũ đã xóa">Khác (Quỹ cũ)</span>
-                                                        <span className="text-[11px] font-black block truncate text-slate-300" title={formatVND(historyTotals.deletedFundsAmount)}>
-                                                            {formatVND(historyTotals.deletedFundsAmount)}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
+                                    {/* Compact Funds Summary Grid - ONLY ACTIVE CURRENT FUNDS */}
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">TỔNG SỐ TIỀN CHI TIẾT CỦA TỪNG QUỸ:</p>
+                                        <div className="grid grid-cols-3 gap-1.5">
+                                            {historyAggregatedData.activeFundList.map(fund => (
+                                                <div 
+                                                    key={fund.id} 
+                                                    className="bg-slate-900/90 p-2 rounded-lg border border-slate-800/80 text-left min-w-0"
+                                                    style={{ borderTop: `2px solid ${fund.color}` }}
+                                                >
+                                                    <p className="text-[10px] text-slate-400 font-semibold truncate" title={fund.name}>
+                                                        {fund.name}
+                                                    </p>
+                                                    <p className="text-[11px] font-extrabold text-white truncate mt-0.5">
+                                                        {formatVND(fund.totalAmount)}
+                                                    </p>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
-                                )}
+                                </div>
 
-                                {historyData.length === 0 ? (
-                                    <div className="glass-card rounded-3xl p-12 text-center text-slate-400 space-y-3">
-                                        <p className="font-bold text-sm">Chưa có lịch sử phân bổ nào được lưu</p>
-                                        <p className="text-xs text-slate-500">Hệ thống sẽ tự động lưu vào 0h hàng ngày khi bạn có nhập liệu.</p>
-                                    </div>
-                                ) : filteredHistory.length === 0 ? (
-                                    <div className="glass-card rounded-3xl p-8 text-center text-slate-400 space-y-2">
-                                        <p className="font-bold text-sm">Không tìm thấy bản ghi nào trong khoảng thời gian này</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <h3 className="text-xs font-bold uppercase text-slate-400 px-1">Chi tiết các ngày ghi nhận ({filteredHistory.length})</h3>
-                                        {filteredHistory.map((record) => {
-                                            const isExpanded = !!expandedRecordIds[record.id];
+                                {/* Collapsible Daily History List */}
+                                <div className="space-y-2">
+                                    <p className="text-xs font-bold text-slate-400 px-1 uppercase">CHI TIẾT CÁC NGÀY GHI NHẬN ({filteredHistory.length})</p>
+                                    
+                                    {filteredHistory.length === 0 ? (
+                                        <div className="text-center py-8 glass-panel rounded-xl text-slate-500 text-xs">
+                                            Không có lịch sử phân bổ nào trong khoảng thời gian này.
+                                        </div>
+                                    ) : (
+                                        filteredHistory.map(rec => {
+                                            const isExpanded = expandedHistoryId === rec.id;
                                             return (
-                                                <div key={record.id} className="glass-card rounded-2xl p-4 shadow-lg transition-all space-y-2">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <div className="flex items-center space-x-3">
-                                                            <button
-                                                                onClick={() => setExpandedRecordIds(prev => ({ ...prev, [record.id]: !isExpanded }))}
-                                                                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 transition-transform duration-200"
-                                                                style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                                                                title="Xổ xuống xem chi tiết"
-                                                            >
-                                                                ▼
+                                                <div key={rec.id} className="glass-card rounded-xl overflow-hidden border border-slate-800">
+                                                    {/* Header Accordion */}
+                                                    <div 
+                                                        onClick={() => setExpandedHistoryId(isExpanded ? null : rec.id)}
+                                                        className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <button className="text-slate-400 text-xs p-1">
+                                                                <i className={`fa-solid ${isExpanded ? 'fa-chevron-up text-cyan-400' : 'fa-chevron-down'}`}></i>
                                                             </button>
-                                                            <div>
-                                                                <div className="flex items-center space-x-2">
-                                                                    <span className="font-extrabold text-sm text-white">{record.date}</span>
-                                                                    <span className="text-[10px] text-slate-400 font-mono">({record.time})</span>
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-bold text-xs text-slate-200">{rec.date}</span>
+                                                                    <span className="text-[10px] text-slate-500">{rec.timestamp.split(' ')[1] || ''}</span>
                                                                 </div>
-                                                                <p className="text-xs text-slate-300 font-medium">
-                                                                    Tổng thu: <strong className="text-emerald-400">{formatVND(record.totalIncome)}</strong>
+                                                                <p className="text-xs font-bold text-emerald-400 mt-0.5">
+                                                                    Tổng thu: {formatVND(rec.totalIncome)}
                                                                 </p>
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex items-center space-x-2">
-                                                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/10 text-slate-300 border border-white/10 hidden sm:inline-block">
-                                                                {record.profileName}
-                                                            </span>
-                                                            <button
-                                                                onClick={() => handleDeleteHistory(record.id)}
-                                                                className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all text-xs font-bold"
-                                                                title="Xóa bản ghi"
-                                                            >
-                                                                Xóa
-                                                            </button>
-                                                        </div>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteHistoryItem(rec.id);
+                                                            }}
+                                                            className="text-slate-500 hover:text-rose-400 p-2 text-xs"
+                                                            title="Xóa bản ghi này"
+                                                        >
+                                                            <i className="fa-solid fa-trash"></i>
+                                                        </button>
                                                     </div>
 
+                                                    {/* Expanded Fund Detail List */}
                                                     {isExpanded && (
-                                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-3 border-t border-white/10 animate-fadeIn">
-                                                            {record.allocations.map((alloc, idx) => (
-                                                                <div key={idx} className="bg-slate-900/80 p-2.5 rounded-xl border border-white/5 space-y-0.5">
-                                                                    <span className="text-[10px] font-bold text-slate-400 truncate block">
-                                                                        {alloc.fundName} {alloc.type === 'vnd' ? '(VND)' : `(${alloc.percent}%)`}
-                                                                    </span>
-                                                                    <span className="text-xs font-black text-white block">{formatVND(alloc.amount)}</span>
+                                                        <div className="bg-slate-950/70 p-3 border-t border-slate-800/80 space-y-1.5 animate-fadeIn">
+                                                            {rec.allocations.map((alloc, idx) => (
+                                                                <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-slate-800/40 last:border-0">
+                                                                    <span className="text-slate-300 font-medium">{alloc.fundName}</span>
+                                                                    <span className="text-emerald-400 font-bold">{formatVND(alloc.amount)}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     )}
                                                 </div>
                                             );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* TAB 4: RULES */}
-                        {activeTab === 'rules' && (
-                            <div className="glass-card rounded-3xl p-6 shadow-2xl space-y-5">
-                                <h2 className="font-extrabold text-lg text-white">Quy Tắc Quản Lý Tài Chính Tự Do JFF</h2>
-                                <p className="text-xs text-slate-300 leading-relaxed">
-                                    Phương pháp quản lý tài chính theo quy tắc các hũ quỹ giúp bạn cân bằng giữa cuộc sống hiện tại và mục tiêu tự do tài chính dài hạn trong tương lai. Bạn có thể tự do chỉnh sửa, thêm bớt các quy tắc cho phù hợp với bản thân.
-                                </p>
-                                
-                                <div className="space-y-4 pt-2">
-                                    {rules.map((rule) => (
-                                        <div key={rule.id} className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-2 relative group transition-all">
-                                            {editingRuleId === rule.id ? (
-                                                <div className="space-y-3">
-                                                    <input 
-                                                        type="text"
-                                                        value={tempRule.title}
-                                                        onChange={(e) => setTempRule({...tempRule, title: e.target.value})}
-                                                        placeholder="Tiêu đề quy tắc..."
-                                                        className="w-full bg-slate-950 text-white font-bold text-sm px-3 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                                    />
-                                                    <textarea 
-                                                        value={tempRule.content}
-                                                        onChange={(e) => setTempRule({...tempRule, content: e.target.value})}
-                                                        placeholder="Nội dung chi tiết..."
-                                                        className="w-full bg-slate-950 text-white text-xs px-3 py-2.5 rounded-xl border border-white/10 min-h-[80px] focus:outline-none focus:border-blue-500"
-                                                    />
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center space-x-2">
-                                                            <input 
-                                                                type="color" 
-                                                                value={tempRule.color} 
-                                                                onChange={(e) => setTempRule({...tempRule, color: e.target.value})} 
-                                                                className="w-9 h-9 rounded-xl bg-slate-950 border border-white/10 cursor-pointer p-0.5" 
-                                                                title="Đổi màu tiêu đề"
-                                                            />
-                                                        </div>
-                                                        <div className="flex space-x-2">
-                                                            <button 
-                                                                onClick={() => {
-                                                                    if (rule.title === 'Tiêu đề quy tắc mới') {
-                                                                        setRules(rules.filter(r => r.id !== rule.id));
-                                                                    }
-                                                                    setEditingRuleId(null); 
-                                                                    setTempRule(null);
-                                                                }} 
-                                                                className="py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all"
-                                                            >
-                                                                Hủy
-                                                            </button>
-                                                            <button 
-                                                                onClick={handleSaveRule} 
-                                                                className="py-2 px-4 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all shadow-md"
-                                                            >
-                                                                Lưu Quy Tắc
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex justify-between items-start gap-2">
-                                                        <h3 className="font-bold text-sm" style={{ color: rule.color }}>{rule.title}</h3>
-                                                        <div className="flex items-center space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 bg-slate-950/50 p-1 rounded-lg">
-                                                            <button onClick={() => handleEditRule(rule)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-md transition-all" title="Sửa quy tắc">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                                                            </button>
-                                                            <button onClick={() => handleDeleteRule(rule.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-all" title="Xóa quy tắc">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-xs text-slate-300 leading-relaxed">{rule.content}</p>
-                                                </>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                
-                                <button
-                                    onClick={handleAddRule}
-                                    className="w-full py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-dashed border-white/20 text-slate-200 font-bold text-xs uppercase transition-all flex items-center justify-center mt-2"
-                                >
-                                    <span>+ Thêm Quy Tắc Mới</span>
-                                </button>
-                            </div>
-                        )}
-                    </main>
-
-                    {/* FLOATING ACTION BUTTONS */}
-                    <div className="fixed bottom-5 right-5 z-40 flex items-center space-x-3">
-                        <button
-                            onClick={undoStack.length > 0 ? handleUndo : undefined}
-                            className={`px-3.5 py-3 rounded-2xl border border-white/20 shadow-2xl backdrop-blur-md transition-all flex items-center justify-center gap-2 ${
-                                undoStack.length > 0 
-                                ? 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white active:scale-95 cursor-pointer' 
-                                : 'bg-slate-900/50 text-slate-600 cursor-not-allowed opacity-50'
-                            }`}
-                            title="Hoàn tác"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
-                            <span className="text-xs font-bold hidden sm:inline-block">Hoàn tác</span>
-                        </button>
-
-                        <button
-                            onClick={() => setShowSwitchProfileModal(true)}
-                            className="px-4 py-3 rounded-2xl bg-slate-900/90 text-white font-extrabold text-xs border border-white/20 shadow-2xl backdrop-blur-md hover:bg-slate-800 transition-all active:scale-95"
-                        >
-                            Chuyển
-                        </button>
-
-                        <button
-                            onClick={() => setShowNewProfileModal(true)}
-                            className="w-12 h-12 rounded-2xl text-white font-black text-2xl shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 flex items-center justify-center border border-white/20"
-                            style={{ backgroundColor: themeColor }}
-                            title="Tạo Giao Diện Quỹ Mới"
-                        >
-                            +
-                        </button>
-                    </div>
-
-                    {/* TOAST BANNER */}
-                    {toast && (
-                        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] bg-slate-900/95 text-white px-5 py-3 rounded-2xl border border-white/20 shadow-2xl backdrop-blur-md text-xs font-extrabold animate-bounce">
-                            {toast}
-                        </div>
-                    )}
-
-                    {/* MODAL: NHẬP SỐ TIỀN CHỐT THỦ CÔNG CHO QUỸ */}
-                    {activeFundForManual && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-4">
-                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                                    <div>
-                                        <h3 className="font-extrabold text-white text-base">Chỉnh Sửa Số Tiền Quỹ</h3>
-                                        <p className="text-[11px] text-slate-400 font-medium">{activeFundForManual.name}</p>
-                                    </div>
-                                    <button onClick={() => setActiveFundForManual(null)} className="text-slate-400 hover:text-white p-1 font-bold">✕</button>
-                                </div>
-
-                                <div className="bg-slate-950/60 p-3 rounded-xl border border-white/5 space-y-1 text-xs">
-                                    <div className="flex justify-between text-slate-400">
-                                        <span>Tự động tính từ thu nhập:</span>
-                                        <span className="font-bold text-slate-200">{formatVND(activeFundForManual.baseAllocated)}</span>
-                                    </div>
-                                    {activeFundForManual.type === 'vnd' ? (
-                                        <p className="text-[10px] text-blue-400">Đơn vị: Quỹ cố định {formatVND(activeFundForManual.vndAmount)}</p>
-                                    ) : (
-                                        <p className="text-[10px] text-blue-400">Đơn vị: Tỷ lệ {activeFundForManual.percent}%</p>
+                                        })
                                     )}
                                 </div>
+                            </div>
+                        )}
+                    </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold text-slate-300 uppercase block">
-                                        Số tiền thực nhận (Chốt cho quỹ này)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        inputMode="text"
-                                        value={manualAmountInput}
-                                        onChange={(e) => setManualAmountInput(formatVNDInput(e.target.value))}
-                                        placeholder="0"
-                                        className="w-full bg-slate-950 text-emerald-400 font-black text-xl px-4 py-3 rounded-xl border border-white/15 focus:outline-none focus:border-blue-500"
-                                        autoFocus
-                                    />
-                                    <div className="flex justify-between items-center text-[10px] pt-1">
-                                        <span className="text-slate-400">
-                                            Chênh lệch: <strong className={
-                                                (parseFormattedNumber(manualAmountInput) - activeFundForManual.baseAllocated) >= 0 ? 'text-amber-400' : 'text-red-400'
-                                            }>
-                                                {formatVND(parseFormattedNumber(manualAmountInput) - activeFundForManual.baseAllocated)}
-                                            </strong>
-                                        </span>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => setManualAmountInput(formatVNDInput(activeFundForManual.baseAllocated.toString()))} 
-                                            className="text-blue-400 hover:underline font-bold"
-                                        >
-                                            Đặt về tự động
-                                        </button>
+                    {}
+                    {editingFundOverride && (
+                        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="glass-panel w-full max-w-sm rounded-2xl p-5 border border-cyan-500/30 space-y-4 animate-scaleUp">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h3 className="text-base font-bold text-white">Chốt Tiền Cho Quỹ</h3>
+                                        <p className="text-xs text-cyan-400 font-semibold">{editingFundOverride.name}</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setEditingFundOverride(null)}
+                                        className="text-slate-400 hover:text-white text-lg p-1"
+                                    >
+                                        <i className="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label className="text-[11px] text-slate-300 block mb-1">Nhập Số Tiền Muốn Chốt Cứng</label>
+                                    <div className="relative flex items-center">
+                                        <input 
+                                            type="text" 
+                                            inputMode="numeric"
+                                            value={overrideInputValue}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.replace(/[^\d]/g, '');
+                                                setOverrideInputValue(raw ? formatVNDPlain(parseInt(raw, 10)) : '');
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-700 text-cyan-400 font-black text-lg px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-400"
+                                            autoFocus
+                                        />
+                                        <span className="absolute right-3 text-cyan-500 font-bold text-sm">₫</span>
                                     </div>
                                 </div>
 
-                                <div className="flex space-x-3 pt-2">
-                                    <button onClick={() => setActiveFundForManual(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Hủy</button>
+                                <div className="flex gap-2 pt-2">
                                     <button 
                                         onClick={() => {
-                                            const targetTotal = parseFormattedNumber(manualAmountInput);
-                                            // The required delta/addition relative to calculated base allocation
-                                            const newAddition = targetTotal - activeFundForManual.baseAllocated;
-                                            
-                                            setFundAdditions(prev => ({
-                                                ...prev,
-                                                [activeFundForManual.id]: newAddition
-                                            }));
-                                            setActiveFundForManual(null);
-                                            showToast(`Đã chốt ${formatVND(targetTotal)} cho ${activeFundForManual.name}`);
-                                        }} 
-                                        className="flex-1 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-lg" 
-                                        style={{ backgroundColor: activeFundForManual.color || themeColor }}
+                                            resetFundOverride(editingFundOverride.id, editingFundOverride.name);
+                                            setEditingFundOverride(null);
+                                        }}
+                                        className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700"
                                     >
-                                        Lưu Số Tiền
+                                        Đặt về Tự Động
+                                    </button>
+                                    <button 
+                                        onClick={applyFundOverride}
+                                        className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/30"
+                                    >
+                                        Chốt Tiền
                                     </button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL: CÀI ĐẶT */}
-                    {showSettings && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-md shadow-2xl border border-white/10 space-y-6 max-h-[90vh] overflow-y-auto">
-                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                                    <h3 className="font-extrabold text-white text-base">Cài Đặt Hệ Thống</h3>
-                                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white p-1 font-bold">✕</button>
-                                </div>
+                    {}
+                    <div className="fixed bottom-3 left-0 right-0 max-w-md mx-auto px-4 z-40">
+                        <div className="glass-panel rounded-2xl p-2 flex items-center justify-between border border-slate-700/80 shadow-2xl backdrop-blur-md">
+                            {/* Tab Switchers */}
+                            <div className="flex items-center gap-1">
+                                <button 
+                                    onClick={() => setActiveTab('input')}
+                                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                        activeTab === 'input' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/40' : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    <i className="fa-solid fa-calculator"></i> Nhập Liệu
+                                </button>
+                                
+                                <button 
+                                    onClick={() => setActiveTab('config')}
+                                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                        activeTab === 'config' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/40' : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    <i className="fa-solid fa-sliders"></i> Cấu Hình
+                                </button>
 
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">Múi Giờ (Lưu Tự Động)</label>
-                                        <select 
-                                            value={gmtOffset} 
-                                            onChange={(e) => setGmtOffset(Number(e.target.value))}
-                                            className="w-full bg-slate-950 text-white text-xs px-3 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                        >
-                                            {GMT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                                        </select>
-                                    </div>
+                                <button 
+                                    onClick={() => setActiveTab('history')}
+                                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                        activeTab === 'history' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/40' : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    <i className="fa-solid fa-clock-rotate-left"></i> Lịch Sử
+                                </button>
+                            </div>
 
-                                    <div>
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">Màu Giao Diện</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {COLOR_PRESETS.map((c, i) => (
-                                                <button key={i} onClick={() => setThemeColor(c.hex)} className={`w-8 h-8 rounded-full border-2 transition-all ${themeColor === c.hex ? 'border-white scale-110 shadow-lg' : 'border-transparent'}`} style={{ backgroundColor: c.hex }} title={c.name} />
-                                            ))}
-                                            <button onClick={() => { setShowColorPickerModal(true); setTempCustomColor(themeColor); setShowSettings(false); }} className="px-3 h-8 rounded-full bg-white/10 text-[10px] font-bold text-slate-300 border border-white/20 hover:bg-white/20">Custom</button>
-                                        </div>
-                                    </div>
+                            {/* Action Buttons: UNDO & RECORD */}
+                            <div className="flex items-center gap-1.5 border-l border-slate-800 pl-2">
+                                {/* UNDO BUTTON */}
+                                <button 
+                                    onClick={handleUndo}
+                                    disabled={undoStack.length === 0}
+                                    className={`p-2.5 rounded-xl text-xs font-medium flex items-center justify-center transition-all ${
+                                        undoStack.length > 0 
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30' 
+                                            : 'bg-slate-800/40 text-slate-600 border border-slate-800 opacity-50 cursor-not-allowed'
+                                    }`}
+                                    title={undoStack.length > 0 ? `Hoàn tác (${undoStack.length})` : 'Không có gì để hoàn tác'}
+                                >
+                                    <i className="fa-solid fa-rotate-left"></i>
+                                </button>
 
-                                    <div>
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 flex justify-between">
-                                            <span>Độ Trong Suốt (Opacity)</span>
-                                            <span>{glassOpacity}%</span>
-                                        </label>
-                                        <input type="range" min="0" max="100" value={glassOpacity} onChange={(e) => setGlassOpacity(Number(e.target.value))} className="w-full accent-blue-500" />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 flex justify-between">
-                                            <span>Độ Mờ (Blur)</span>
-                                            <span>{glassBlur}px</span>
-                                        </label>
-                                        <input type="range" min="0" max="30" value={glassBlur} onChange={(e) => setGlassBlur(Number(e.target.value))} className="w-full accent-blue-500" />
-                                    </div>
-
-                                    <div className="pt-2 border-t border-white/10">
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">Hình Nền</label>
-                                        <div className="flex space-x-2">
-                                            <label className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 text-center text-xs font-bold cursor-pointer transition-all">
-                                                Tải ảnh lên
-                                                <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                                            </label>
-                                            {bgImage && (
-                                                <button onClick={() => { setBgImage(''); showToast('Đã xóa hình nền'); }} className="px-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-bold hover:bg-red-500/20 transition-all">Xóa</button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="pt-2 border-t border-white/10">
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">Dữ Liệu</label>
-                                        <div className="flex space-x-2">
-                                            <button onClick={handleExportData} className="flex-1 py-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold hover:bg-blue-500/30">Xuất Backup</button>
-                                            <label className="flex-1 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-center text-xs font-bold cursor-pointer hover:bg-emerald-500/30">
-                                                Nhập Backup
-                                                <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
+                                {/* SAVE / RECORD BUTTON */}
+                                {activeTab === 'input' && (
+                                    <button 
+                                        onClick={handleRecordAllocation}
+                                        className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all active:scale-95"
+                                        title="Lưu ghi nhận thu nhập"
+                                    >
+                                        <i className="fa-solid fa-plus text-base"></i>
+                                    </button>
+                                )}
                             </div>
                         </div>
-                    )}
-
-                    {/* MODAL: CUSTOM COLOR PICKER */}
-                    {showColorPickerModal && (
-                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-4">
-                                <h3 className="font-extrabold text-white text-base">Tùy Chọn Màu Tự Do</h3>
-                                <div className="flex justify-center py-4">
-                                    <input type="color" value={tempCustomColor} onChange={(e) => setTempCustomColor(e.target.value)} className="w-24 h-24 rounded-full border-4 border-white/20 bg-slate-950 p-1 cursor-pointer" />
-                                </div>
-                                <div className="flex space-x-3 pt-2">
-                                    <button onClick={() => { setShowColorPickerModal(false); setShowSettings(true); }} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Hủy</button>
-                                    <button onClick={() => { setThemeColor(tempCustomColor); setShowColorPickerModal(false); setShowSettings(true); }} className="flex-1 py-2.5 rounded-xl bg-blue-500 text-white font-extrabold text-xs">Lưu Màu Này</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: CHUYỂN / XÓA GIAO DIỆN */}
-                    {showSwitchProfileModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-4 max-h-[80vh] overflow-y-auto">
-                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                                    <h3 className="font-extrabold text-white text-base">Chọn Giao Diện</h3>
-                                    <button onClick={() => setShowSwitchProfileModal(false)} className="text-slate-400 hover:text-white p-1 font-bold">✕</button>
-                                </div>
-                                <div className="space-y-2">
-                                    {profiles.map(p => (
-                                        <div key={p.id} className={`flex items-center justify-between p-3 rounded-2xl border ${activeProfileId === p.id ? 'bg-blue-500/20 border-blue-500/50' : 'bg-slate-800/50 border-white/5 hover:border-white/20'}`}>
-                                            <div className="flex-1 cursor-pointer" onClick={() => { setActiveProfileId(p.id); setShowSwitchProfileModal(false); }}>
-                                                <h4 className={`font-bold text-sm ${activeProfileId === p.id ? 'text-blue-400' : 'text-slate-200'}`}>{p.name}</h4>
-                                                <p className="text-[10px] text-slate-400">{p.funds.length} ô quỹ</p>
-                                            </div>
-                                            {profiles.length > 1 && (
-                                                <button onClick={() => setProfileToDelete(p)} className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all" title="Xóa giao diện">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* CONFIRM DELETE PROFILE */}
-                    {profileToDelete && (
-                        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-red-500/30 space-y-4">
-                                <h3 className="font-extrabold text-red-400 text-base">Xác Nhận Xóa Giao Diện</h3>
-                                <p className="text-xs text-slate-300">Bạn có muốn xóa giao diện <strong>{profileToDelete.name}</strong> không? Bạn có thể dùng nút Hoàn Tác để khôi phục lại sau khi xóa.</p>
-                                <div className="flex space-x-3 pt-2">
-                                    <button onClick={() => setProfileToDelete(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Huỷ</button>
-                                    <button onClick={() => { 
-                                        saveStateForUndo(profiles, historyData, activeProfileId);
-                                        const remaining = profiles.filter(p => p.id !== profileToDelete.id);
-                                        setProfiles(remaining); 
-                                        if (activeProfileId === profileToDelete.id && remaining.length > 0) {
-                                            setActiveProfileId(remaining[0].id);
-                                        }
-                                        setProfileToDelete(null); 
-                                        showToast(`Đã xóa: ${profileToDelete.name}`); 
-                                    }} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-extrabold text-xs">Ok</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: TẠO GIAO DIỆN MỚI */}
-                    {showNewProfileModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                            <div className="bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/10 space-y-4">
-                                <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                                    <h3 className="font-extrabold text-white text-base">Tạo Giao Diện Mới</h3>
-                                    <button onClick={() => setShowNewProfileModal(false)} className="text-slate-400 hover:text-white p-1 font-bold">✕</button>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold text-slate-400 uppercase">Tên Giao Diện</label>
-                                    <input
-                                        type="text"
-                                        value={newProfileName}
-                                        onChange={(e) => setNewProfileName(e.target.value)}
-                                        className="w-full bg-slate-950 text-white font-bold text-sm px-4 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-blue-500"
-                                        placeholder=""
-                                        autoFocus
-                                    />
-                                </div>
-                                <button onClick={handleCreateProfile} className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-extrabold text-sm shadow-lg transition-all">Tạo Mới & Chuyển Ngay</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* IMAGE CROPPER MODAL */}
-                    {tempImage && (
-                        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/95">
-                            <div className="w-full max-w-4xl h-[80vh] flex flex-col bg-slate-900 rounded-3xl border border-white/10 overflow-hidden">
-                                <div className="p-4 border-b border-white/10 flex justify-between items-center">
-                                    <h3 className="font-extrabold text-white text-sm">Cắt Hình Nền</h3>
-                                    <div className="flex space-x-2">
-                                        <button onClick={() => setCropAspectRatio(NaN)} className="px-2 py-1 bg-white/10 rounded text-[10px] text-white">Tự Do</button>
-                                        <button onClick={() => setCropAspectRatio(16/9)} className="px-2 py-1 bg-white/10 rounded text-[10px] text-white">16:9 PC</button>
-                                        <button onClick={() => setCropAspectRatio(9/16)} className="px-2 py-1 bg-white/10 rounded text-[10px] text-white">9:16 Mobile</button>
-                                    </div>
-                                </div>
-                                <div className="flex-1 bg-black relative">
-                                    <img ref={imageRef} src={tempImage} alt="Crop preview" className="max-w-full block" />
-                                </div>
-                                <div className="p-4 border-t border-white/10 flex justify-end space-x-3">
-                                    <button onClick={() => setTempImage(null)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Hủy</button>
-                                    <button onClick={handleApplyCrop} className="px-4 py-2 rounded-xl bg-blue-500 text-white font-bold text-xs shadow-lg">Áp Dụng Hình Nền</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    </div>
                 </div>
             );
         }
 
-        const rootElement = document.getElementById('root');
-        const root = ReactDOM.createRoot(rootElement);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
