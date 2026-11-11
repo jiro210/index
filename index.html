@@ -13,6 +13,8 @@
     <!-- React & ReactDOM React 18 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Supabase JS (đăng nhập + đồng bộ dữ liệu) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
@@ -130,7 +132,8 @@
                 timezone: 'Asia/Ho_Chi_Minh',
                 draftIncome: '',
                 draftNote: '',
-                draftOverrides: {}
+                draftOverrides: {},
+                draftExcluded: {}
             }
         ];
 
@@ -203,6 +206,213 @@
             }
         };
 
+        // ===== Hằng số & hàm tiện ích mới =====
+        const EMPTY_OBJ = {};
+        const WEEKDAYS_VI = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+
+        const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+        const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } };
+        const lsDel = (k) => { try { localStorage.removeItem(k); } catch (e) { /* bỏ qua */ } };
+
+        const fmtPct = (n) => {
+            const v = Math.round((Number(n) || 0) * 10) / 10;
+            return String(v).replace('.', ',');
+        };
+
+        const compactVND = (n) => {
+            const v = Number(n) || 0;
+            if (v >= 1000000000) return fmtPct(v / 1000000000) + ' tỷ';
+            if (v >= 1000000) return fmtPct(v / 1000000) + ' tr';
+            return formatVNDPlain(v);
+        };
+
+        // Khoảng ngày của 1 tháng (m = 1..12)
+        const monthRange = (y, m) => {
+            const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+            const mm = String(m).padStart(2, '0');
+            return { start: `${y}-${mm}-01`, end: `${y}-${mm}-${String(last).padStart(2, '0')}` };
+        };
+
+        const shiftDate = (str, days) => {
+            const [y, m, d] = str.split('-').map(Number);
+            return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+        };
+
+        const weekdayOf = (str) => {
+            if (!str) return '';
+            const [y, m, d] = str.split('-').map(Number);
+            return WEEKDAYS_VI[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+        };
+
+        const shortDate = (str) => (str ? `${str.slice(8, 10)}/${str.slice(5, 7)}` : '...');
+
+        /**
+         * Chia tiền cho các quỹ ĐƯỢC CHỌN (quỹ nằm trong `excluded` thì bị bỏ qua).
+         * 1) Quỹ tiền mặt (VND) được chia đúng số tiền đã đặt.
+         * 2) Phần còn lại chia cho các quỹ % đã chọn.
+         *    - Nếu tổng % của các quỹ đã chọn < 100%: nâng đều mỗi quỹ cùng một số điểm % cho đủ 100%.
+         *    - Nếu tổng % > 100%: thu nhỏ theo tỷ lệ về 100%.
+         * 3) Quỹ chốt thủ công (overrides) giữ nguyên số tiền đã chốt, không ảnh hưởng quỹ khác.
+         */
+        const computeAllocations = (funds, income, overrides, excluded) => {
+            const ex = excluded || {};
+            const ov = overrides || {};
+            const inc = Number(income) || 0;
+
+            const selected = funds.filter(f => !ex[f.id]);
+            const vndFunds = selected.filter(f => f.type === 'vnd');
+            const pctFunds = selected.filter(f => f.type !== 'vnd');
+
+            const vndTotal = vndFunds.reduce((s, f) => s + (Number(f.vndAmount) || 0), 0);
+            const remaining = Math.max(0, inc - vndTotal);
+            const pctSum = pctFunds.reduce((s, f) => s + Math.max(0, Number(f.percent) || 0), 0);
+            const n = pctFunds.length;
+
+            let adjust = null;
+            let delta = 0;
+            let scale = 1;
+            if (n > 0) {
+                if (pctSum < 100 - 1e-9) {
+                    adjust = 'raise';
+                    delta = (100 - pctSum) / n;
+                } else if (pctSum > 100 + 1e-9) {
+                    adjust = 'scale';
+                    scale = 100 / pctSum;
+                }
+            }
+
+            const effPct = {};
+            pctFunds.forEach(f => {
+                const p = Math.max(0, Number(f.percent) || 0);
+                effPct[f.id] = adjust === 'raise' ? p + delta : adjust === 'scale' ? p * scale : p;
+            });
+
+            const base = {};
+            if (inc > 0) {
+                vndFunds.forEach(f => { base[f.id] = Number(f.vndAmount) || 0; });
+
+                // Quỹ % cuối cùng có tỷ lệ > 0 nhận phần dư làm tròn để tổng khớp chính xác
+                let holderId = null;
+                pctFunds.forEach(f => { if (effPct[f.id] > 0) holderId = f.id; });
+
+                let acc = 0;
+                pctFunds.forEach(f => {
+                    if (f.id === holderId) return;
+                    const amt = Math.round((remaining * effPct[f.id]) / 100);
+                    base[f.id] = amt;
+                    acc += amt;
+                });
+                if (holderId !== null) base[holderId] = Math.max(0, remaining - acc);
+            }
+
+            const list = funds.map(f => {
+                const isSelected = !ex[f.id];
+                const baseAllocated = isSelected ? (base[f.id] || 0) : 0;
+                const isOverridden = isSelected && ov[f.id] !== undefined;
+                const finalAmount = isSelected ? (isOverridden ? ov[f.id] : baseAllocated) : 0;
+                return {
+                    ...f,
+                    selected: isSelected,
+                    baseAllocated,
+                    finalAmount,
+                    isOverridden,
+                    effPercent: f.type === 'vnd' ? null : (isSelected ? effPct[f.id] : null)
+                };
+            });
+
+            const allocated = list.reduce((s, a) => s + (Number(a.finalAmount) || 0), 0);
+
+            return {
+                list,
+                meta: {
+                    selectedCount: selected.length,
+                    vndTotal,
+                    remaining,
+                    pctSum,
+                    pctCount: n,
+                    adjust,
+                    delta,
+                    scale,
+                    allocated,
+                    overflow: inc > 0 && vndTotal > inc,
+                    noPercentLeft: inc > 0 && n === 0 && remaining > 0
+                }
+            };
+        };
+
+        // ===== Supabase: cấu hình & tiện ích =====
+        // Có thể điền sẵn ở đây (chỉ dùng anon/publishable key - KHÔNG dùng service_role / secret key),
+        // hoặc để trống rồi nhập trong app: Menu ☰ → Tài Khoản & Đồng Bộ.
+        const SUPABASE_URL_DEFAULT = '';
+        const SUPABASE_KEY_DEFAULT = '';
+
+        const getSbConfig = () => {
+            const url = lsGet('jff_sb_url') || SUPABASE_URL_DEFAULT;
+            const key = lsGet('jff_sb_key') || SUPABASE_KEY_DEFAULT;
+            return { url: (url || '').trim().replace(/\/+$/, ''), key: (key || '').trim() };
+        };
+
+        // Chặn khóa bí mật bị dán nhầm vào frontend
+        const isForbiddenKey = (key) => {
+            if (!key) return false;
+            if (key.indexOf('sb_secret_') === 0) return true;
+            try {
+                const parts = key.split('.');
+                if (parts.length === 3) {
+                    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                    return payload && payload.role === 'service_role';
+                }
+            } catch (e) { /* không phải JWT */ }
+            return false;
+        };
+
+        // Ảnh nền dạng data: quá nặng, chỉ giữ trên máy, không đẩy lên đám mây
+        const stripForCloud = (wsList) => wsList.map(ws => (
+            ws && typeof ws.bgImage === 'string' && ws.bgImage.indexOf('data:') === 0 ? { ...ws, bgImage: '' } : ws
+        ));
+
+        const summarizeWorkspaces = (wsList) => {
+            const list = Array.isArray(wsList) ? wsList : [];
+            let records = 0;
+            let last = '';
+            list.forEach(ws => {
+                (ws.history || []).forEach(r => {
+                    records += 1;
+                    if (r.date && r.date > last) last = r.date;
+                });
+            });
+            return { workspaces: list.length, records, last };
+        };
+
+        const isPristineWorkspaces = (wsList) => (
+            wsList.length === 1 &&
+            (!wsList[0].history || wsList[0].history.length === 0) &&
+            !wsList[0].draftIncome &&
+            JSON.stringify(wsList[0].funds || []) === JSON.stringify(DEFAULT_FUNDS)
+        );
+
+        const translateAuthError = (msg) => {
+            const m = (msg || '').toLowerCase();
+            if (m.includes('invalid login')) return 'Sai email hoặc mật khẩu.';
+            if (m.includes('email not confirmed')) return 'Email chưa được xác nhận. Hãy bấm liên kết trong email xác nhận.';
+            if (m.includes('already registered') || m.includes('already been registered')) return 'Email này đã đăng ký. Hãy chuyển sang Đăng nhập.';
+            if (m.includes('signups not allowed') || m.includes('signup is disabled') || m.includes('signups are disabled')) return 'Dự án Supabase đang tắt đăng ký. Hãy tạo user trong Supabase → Authentication → Users.';
+            if (m.includes('password should be') || m.includes('weak password')) return 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+            if (m.includes('rate limit')) return 'Thử quá nhiều lần, vui lòng đợi một lát rồi thử lại.';
+            if (m.includes('failed to fetch') || m.includes('network')) return 'Không kết nối được tới Supabase. Kiểm tra mạng hoặc địa chỉ Project URL.';
+            return msg || 'Có lỗi xảy ra.';
+        };
+
+        const translateSyncError = (err) => {
+            const msg = (err && err.message) ? err.message : String(err || '');
+            const m = msg.toLowerCase();
+            if ((err && err.code === 'PGRST205') || m.includes('could not find the table') || m.includes('jff_data')) {
+                return 'Chưa có bảng jff_data trong Supabase. Hãy chạy file supabase_setup.sql trong SQL Editor.';
+            }
+            if (m.includes('failed to fetch') || m.includes('network')) return 'Mất kết nối mạng. Sẽ tự đồng bộ lại khi có mạng.';
+            if (m.includes('jwt') || m.includes('not authenticated')) return 'Phiên đăng nhập hết hạn, hãy đăng nhập lại.';
+            return msg;
+        };
         function App() {
             // Navigation tab: 'input' | 'config' | 'history'
             const [activeTab, setActiveTab] = useState('input');
@@ -252,6 +462,7 @@
             const totalIncomeInput = currentWs.draftIncome || '';
             const incomeNote = currentWs.draftNote || '';
             const overrides = currentWs.draftOverrides || {};
+            const excluded = currentWs.draftExcluded || EMPTY_OBJ;
 
             const setTotalIncomeInput = (val) => {
                 updateCurrentWorkspaceData(ws => ({
@@ -285,29 +496,14 @@
                             const income = parseVNDInput(ws.draftIncome);
                             if (income > 0) {
                                 const wsFunds = ws.funds || DEFAULT_FUNDS;
-                                let defaultVndSum = 0;
-                                wsFunds.forEach(f => {
-                                    if (f.type === 'vnd') defaultVndSum += (Number(f.vndAmount) || 0);
-                                });
-                                const remainingForPercent = Math.max(0, income - defaultVndSum);
-                                const wsOverrides = ws.draftOverrides || {};
-
-                                const allocations = wsFunds.map(fund => {
-                                    let baseAllocated = 0;
-                                    if (fund.type === 'vnd') {
-                                        baseAllocated = Number(fund.vndAmount) || 0;
-                                    } else {
-                                        baseAllocated = Math.round((remainingForPercent * (Number(fund.percent) || 0)) / 100);
-                                    }
-                                    const isOverridden = wsOverrides[fund.id] !== undefined;
-                                    const finalAmount = isOverridden ? wsOverrides[fund.id] : baseAllocated;
-                                    return {
-                                        fundId: fund.id,
-                                        fundName: fund.name,
-                                        bankInfo: fund.bankInfo,
-                                        amount: finalAmount
-                                    };
-                                });
+                                const allocations = computeAllocations(wsFunds, income, ws.draftOverrides, ws.draftExcluded).list
+                                    .filter(a => a.selected)
+                                    .map(a => ({
+                                        fundId: a.id,
+                                        fundName: a.name,
+                                        bankInfo: a.bankInfo,
+                                        amount: a.finalAmount
+                                    }));
 
                                 const autoRecord = {
                                     id: 'rec_auto_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -323,14 +519,16 @@
                                     history: [autoRecord, ...(ws.history || [])],
                                     draftIncome: '',
                                     draftNote: '',
-                                    draftOverrides: {}
+                                    draftOverrides: {},
+                                    draftExcluded: {}
                                 };
                             }
                             return {
                                 ...ws,
                                 draftIncome: '',
                                 draftNote: '',
-                                draftOverrides: {}
+                                draftOverrides: {},
+                                draftExcluded: {}
                             };
                         });
                     });
@@ -541,6 +739,11 @@
             const [endDate, setEndDate] = useState(() => getDateStrInTZ(currentTimezone));
             const [historySearch, setHistorySearch] = useState('');
             const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+            const [rangeMode, setRangeMode] = useState('month'); // 'month' | 'custom'
+            const [viewMonth, setViewMonth] = useState(() => {
+                const [y, m] = getDateStrInTZ(currentTimezone).split('-').map(Number);
+                return { y, m };
+            });
 
             const [toastMessage, setToastMessage] = useState(null);
 
@@ -571,6 +774,11 @@
                 updateCurrentWorkspaceData(ws => ({ ...ws, timezone: tz }));
                 setStartDate(getFirstDayOfMonthStrInTZ(tz));
                 setEndDate(getDateStrInTZ(tz));
+                setRangeMode('month');
+                {
+                    const [tzY, tzM] = getDateStrInTZ(tz).split('-').map(Number);
+                    setViewMonth({ y: tzY, m: tzM });
+                }
                 showToast('Đã đổi múi giờ sang: ' + tz);
             };
 
@@ -597,7 +805,8 @@
                     timezone: currentTimezone,
                     draftIncome: '',
                     draftNote: '',
-                    draftOverrides: {}
+                    draftOverrides: {},
+                    draftExcluded: {}
                 };
                 setWorkspaces(prev => [...prev, newWs]);
                 setActiveWsId(newId);
@@ -626,39 +835,12 @@
                 return funds.reduce((sum, f) => f.type === 'percent' ? sum + (Number(f.percent) || 0) : sum, 0);
             }, [funds]);
 
-            const calculatedAllocations = useMemo(() => {
-                const income = parsedTotalIncome;
-
-                let defaultVndSum = 0;
-                funds.forEach(f => {
-                    if (f.type === 'vnd') {
-                        defaultVndSum += (Number(f.vndAmount) || 0);
-                    }
-                });
-
-                const remainingForPercent = Math.max(0, income - defaultVndSum);
-
-                return funds.map(fund => {
-                    let baseAllocated = 0;
-                    if (income > 0) {
-                        if (fund.type === 'vnd') {
-                            baseAllocated = Number(fund.vndAmount) || 0;
-                        } else {
-                            baseAllocated = Math.round((remainingForPercent * (Number(fund.percent) || 0)) / 100);
-                        }
-                    }
-
-                    const isOverridden = overrides[fund.id] !== undefined;
-                    const finalAmount = isOverridden ? overrides[fund.id] : baseAllocated;
-
-                    return {
-                        ...fund,
-                        baseAllocated,
-                        finalAmount,
-                        isOverridden
-                    };
-                });
-            }, [funds, parsedTotalIncome, overrides]);
+            const allocationPlan = useMemo(
+                () => computeAllocations(funds, parsedTotalIncome, overrides, excluded),
+                [funds, parsedTotalIncome, overrides, excluded]
+            );
+            const calculatedAllocations = allocationPlan.list;
+            const planMeta = allocationPlan.meta;
 
             const [editingFundOverride, setEditingFundOverride] = useState(null);
             const [overrideInputValue, setOverrideInputValue] = useState('');
@@ -705,6 +887,10 @@
                     return;
                 }
 
+                if (planMeta.selectedCount === 0) {
+                    showToast('Hãy tích chọn ít nhất 1 quỹ để chia tiền', 'warning');
+                    return;
+                }
                 saveSnapshotForUndo('Ghi nhận thu nhập');
 
                 const dateStr = getDateStrInTZ(currentTimezone, nowDate);
@@ -716,7 +902,7 @@
                     timestamp: `${dateStr} ${timeStr}`,
                     totalIncome: parsedTotalIncome,
                     note: incomeNote.trim() || 'Thu nhập',
-                    allocations: calculatedAllocations.map(a => ({
+                    allocations: calculatedAllocations.filter(a => a.selected).map(a => ({
                         fundId: a.id,
                         fundName: a.name,
                         bankInfo: a.bankInfo,
@@ -729,7 +915,8 @@
                     history: [record, ...(ws.history || [])],
                     draftIncome: '',
                     draftNote: '',
-                    draftOverrides: {}
+                    draftOverrides: {},
+                    draftExcluded: {}
                 }));
                 showToast('Đã lưu lịch sử phân bổ thành công!', 'success');
             };
@@ -908,6 +1095,531 @@
                 };
             }, [filteredHistory, funds]);
 
+            // ===== Chọn quỹ để chia tiền =====
+            const setExcluded = (val) => {
+                updateCurrentWorkspaceData(ws => ({
+                    ...ws,
+                    draftExcluded: typeof val === 'function' ? val(ws.draftExcluded || {}) : val
+                }));
+            };
+
+            const toggleFundSelected = (fundId) => {
+                setExcluded(prev => {
+                    const next = { ...prev };
+                    if (next[fundId]) delete next[fundId];
+                    else next[fundId] = true;
+                    return next;
+                });
+            };
+
+            const selectAllFunds = () => setExcluded({});
+
+            const deselectAllFunds = () => {
+                const all = {};
+                funds.forEach(f => { all[f.id] = true; });
+                setExcluded(all);
+            };
+
+            // ===== Tra cứu theo tháng =====
+            const applyMonth = (y, m) => {
+                const r = monthRange(y, m);
+                setViewMonth({ y, m });
+                setStartDate(r.start);
+                setEndDate(r.end);
+                setRangeMode('month');
+            };
+
+            const goMonth = (delta) => {
+                let y = viewMonth.y;
+                let m = viewMonth.m + delta;
+                if (m < 1) { m = 12; y -= 1; }
+                if (m > 12) { m = 1; y += 1; }
+                applyMonth(y, m);
+            };
+
+            const goThisMonth = () => {
+                const [y, m] = getDateStrInTZ(currentTimezone).split('-').map(Number);
+                applyMonth(y, m);
+                setHistorySearch('');
+            };
+
+            const goLast30Days = () => {
+                const today = getDateStrInTZ(currentTimezone);
+                setStartDate(shiftDate(today, -29));
+                setEndDate(today);
+                setRangeMode('custom');
+            };
+
+            const historySummary = useMemo(() => {
+                const list = historyAggregatedData.activeFundList;
+                const sumFunds = list.reduce((s, f) => s + f.totalAmount, 0);
+                const rows = list
+                    .map(f => ({ ...f, share: sumFunds > 0 ? (f.totalAmount / sumFunds) * 100 : 0 }))
+                    .sort((a, b) => b.totalAmount - a.totalAmount);
+                const avg = historyAggregatedData.count > 0
+                    ? Math.round(historyAggregatedData.grandTotalIncome / historyAggregatedData.count)
+                    : 0;
+                return { rows, sumFunds, avg };
+            }, [historyAggregatedData]);
+
+            const groupedHistory = useMemo(() => {
+                const map = {};
+                filteredHistory.forEach(rec => {
+                    if (!map[rec.date]) map[rec.date] = { date: rec.date, total: 0, records: [] };
+                    map[rec.date].total += Number(rec.totalIncome) || 0;
+                    map[rec.date].records.push(rec);
+                });
+                return Object.values(map).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+            }, [filteredHistory]);
+
+            const colorForAlloc = useMemo(() => {
+                const byId = {};
+                const byName = {};
+                funds.forEach(f => {
+                    byId[f.id] = f.color;
+                    byName[(f.name || '').trim().toLowerCase()] = f.color;
+                });
+                return (a) => byId[a.fundId] || byName[(a.fundName || '').trim().toLowerCase()] || '#6b7280';
+            }, [funds]);
+
+            // ===== Supabase: đăng nhập + đồng bộ =====
+            const [sbConfig, setSbConfig] = useState(getSbConfig);
+            const sbKeyForbidden = isForbiddenKey(sbConfig.key);
+            const sb = useMemo(() => {
+                if (!sbConfig.url || !sbConfig.key || isForbiddenKey(sbConfig.key)) return null;
+                if (!window.supabase || !window.supabase.createClient) return null;
+                try {
+                    return window.supabase.createClient(sbConfig.url, sbConfig.key, {
+                        auth: { persistSession: true, autoRefreshToken: true, storageKey: 'jff-supabase-auth' }
+                    });
+                } catch (e) {
+                    return null;
+                }
+            }, [sbConfig]);
+
+            const [authUser, setAuthUser] = useState(null);
+            const authUserId = authUser ? authUser.id : null;
+            const [syncStatus, setSyncStatus] = useState('off'); // off | syncing | pending | saved | error | conflict
+            const [syncError, setSyncError] = useState('');
+            const [cloudReady, setCloudReady] = useState(false);
+            const [conflictRow, setConflictRow] = useState(null);
+            const [showAccountModal, setShowAccountModal] = useState(false);
+            const [authMode, setAuthMode] = useState('login');
+            const [authEmail, setAuthEmail] = useState('');
+            const [authPassword, setAuthPassword] = useState('');
+            const [authBusy, setAuthBusy] = useState(false);
+            const [authMessage, setAuthMessage] = useState(null);
+            const [cfgUrlInput, setCfgUrlInput] = useState(sbConfig.url);
+            const [cfgKeyInput, setCfgKeyInput] = useState(sbConfig.key);
+
+            const workspacesRef = useRef(workspaces);
+            workspacesRef.current = workspaces;
+            const cloudRevRef = useRef(0);
+            const lastSyncedJsonRef = useRef(null);
+            const pushingRef = useRef(false);
+            const pushAgainRef = useRef(false);
+            const mountedRef = useRef(false);
+            const pushRef = useRef(null);
+
+            // Áp dụng dữ liệu từ đám mây vào máy
+            const applyCloud = (row) => {
+                const cloudWs = row && row.data && Array.isArray(row.data.workspaces) ? row.data.workspaces : null;
+                if (!cloudWs || cloudWs.length === 0) {
+                    setSyncStatus('error');
+                    setSyncError('Dữ liệu trên đám mây rỗng hoặc sai cấu trúc.');
+                    setConflictRow(null);
+                    return;
+                }
+                const localById = {};
+                workspacesRef.current.forEach(w => { localById[w.id] = w; });
+                const merged = cloudWs.map(w => {
+                    const local = localById[w.id];
+                    if (!w.bgImage && local && typeof local.bgImage === 'string' && local.bgImage.indexOf('data:') === 0) {
+                        return { ...w, bgImage: local.bgImage };
+                    }
+                    return w;
+                });
+                lastSyncedJsonRef.current = JSON.stringify(stripForCloud(merged));
+                cloudRevRef.current = Number(row.rev) || 1;
+                lsSet('jff_cloud_rev', String(cloudRevRef.current));
+                lsSet('jff_dirty', '0');
+                if (authUserId) lsSet('jff_synced_user', authUserId);
+                workspacesRef.current = merged;
+                setWorkspaces(merged);
+                setActiveWsId(prev => (merged.some(w => w.id === prev) ? prev : merged[0].id));
+                setUndoStack([]);
+                setRedoStack([]);
+                setConflictRow(null);
+                setCloudReady(true);
+                setSyncError('');
+                setSyncStatus('saved');
+            };
+
+            const openConflict = async () => {
+                const { data: row, error } = await sb.from('jff_data').select('data, rev').eq('user_id', authUserId).maybeSingle();
+                if (error) throw error;
+                if (!row) {
+                    // Bản trên đám mây đã bị xóa: tạo lại từ dữ liệu máy này
+                    cloudRevRef.current = 0;
+                    pushAgainRef.current = true;
+                    return;
+                }
+                setConflictRow(row);
+                setSyncStatus('conflict');
+            };
+
+            // Đẩy dữ liệu máy lên đám mây (có kiểm tra phiên bản để không ghi đè nhầm thiết bị khác)
+            const pushToCloud = async () => {
+                if (!sb || !authUserId) return;
+                if (pushingRef.current) {
+                    pushAgainRef.current = true;
+                    return;
+                }
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    setSyncStatus('error');
+                    setSyncError('Đang offline. Sẽ tự đồng bộ lại khi có mạng.');
+                    return;
+                }
+                pushingRef.current = true;
+                setSyncStatus('syncing');
+                setSyncError('');
+                const stripped = stripForCloud(workspacesRef.current);
+                const json = JSON.stringify(stripped);
+                const payload = { version: 'v7', exportDate: new Date().toISOString(), workspaces: stripped };
+                try {
+                    let newRev = 0;
+                    if (cloudRevRef.current === 0) {
+                        const { error } = await sb.from('jff_data').insert({ user_id: authUserId, data: payload, rev: 1 });
+                        if (error) {
+                            if (error.code === '23505') {
+                                await openConflict();
+                                return;
+                            }
+                            throw error;
+                        }
+                        newRev = 1;
+                    } else {
+                        const { data: rows, error } = await sb
+                            .from('jff_data')
+                            .update({ data: payload, rev: cloudRevRef.current + 1, updated_at: new Date().toISOString() })
+                            .eq('user_id', authUserId)
+                            .eq('rev', cloudRevRef.current)
+                            .select('rev');
+                        if (error) throw error;
+                        if (!rows || rows.length === 0) {
+                            await openConflict();
+                            return;
+                        }
+                        newRev = rows[0].rev;
+                    }
+                    cloudRevRef.current = Number(newRev) || 1;
+                    lastSyncedJsonRef.current = json;
+                    lsSet('jff_cloud_rev', String(cloudRevRef.current));
+                    lsSet('jff_synced_user', authUserId);
+                    const stillSame = JSON.stringify(stripForCloud(workspacesRef.current)) === json;
+                    lsSet('jff_dirty', stillSame ? '0' : '1');
+                    setSyncStatus(stillSame ? 'saved' : 'pending');
+                } catch (err) {
+                    setSyncStatus('error');
+                    setSyncError(translateSyncError(err));
+                } finally {
+                    pushingRef.current = false;
+                    if (pushAgainRef.current) {
+                        pushAgainRef.current = false;
+                        setTimeout(() => { if (pushRef.current) pushRef.current(); }, 300);
+                    }
+                }
+            };
+            pushRef.current = pushToCloud;
+
+            // 1) Lắng nghe trạng thái đăng nhập
+            useEffect(() => {
+                if (!sb) {
+                    setAuthUser(null);
+                    return;
+                }
+                let active = true;
+                sb.auth.getSession().then(({ data }) => {
+                    if (active) setAuthUser(data && data.session ? data.session.user : null);
+                });
+                const { data: sub } = sb.auth.onAuthStateChange((_event, session) => {
+                    setAuthUser(session ? session.user : null);
+                });
+                return () => {
+                    active = false;
+                    sub.subscription.unsubscribe();
+                };
+            }, [sb]);
+
+            // 2) Đồng bộ lần đầu sau khi đăng nhập
+            useEffect(() => {
+                setCloudReady(false);
+                cloudRevRef.current = 0;
+                if (!sb || !authUserId) {
+                    setSyncStatus('off');
+                    return;
+                }
+                let cancelled = false;
+                (async () => {
+                    setSyncStatus('syncing');
+                    setSyncError('');
+                    try {
+                        const { data: row, error } = await sb.from('jff_data').select('data, rev').eq('user_id', authUserId).maybeSingle();
+                        if (cancelled) return;
+                        if (error) throw error;
+
+                        const syncedUser = lsGet('jff_synced_user');
+                        const sameUser = syncedUser === authUserId;
+                        const dirty = lsGet('jff_dirty') === '1';
+                        const localWs = workspacesRef.current;
+
+                        if (!row) {
+                            if (syncedUser && !sameUser && !isPristineWorkspaces(localWs)) {
+                                const ok = window.confirm('Máy này đang giữ dữ liệu của một tài khoản khác.\n\nOK = tải dữ liệu này lên tài khoản mới\nHủy = bắt đầu với dữ liệu trống');
+                                if (!ok) {
+                                    workspacesRef.current = DEFAULT_WORKSPACES;
+                                    setWorkspaces(DEFAULT_WORKSPACES);
+                                    setActiveWsId('ws_default');
+                                }
+                            }
+                            lsSet('jff_synced_user', authUserId);
+                            cloudRevRef.current = 0;
+                            lastSyncedJsonRef.current = null;
+                            setCloudReady(true);
+                            setTimeout(() => { if (pushRef.current) pushRef.current(); }, 50);
+                            return;
+                        }
+
+                        const cloudRev = Number(row.rev) || 1;
+
+                        if (!sameUser) {
+                            if (isPristineWorkspaces(localWs)) {
+                                applyCloud(row);
+                            } else {
+                                cloudRevRef.current = cloudRev;
+                                setConflictRow(row);
+                                setSyncStatus('conflict');
+                            }
+                            return;
+                        }
+
+                        const storedRev = Number(lsGet('jff_cloud_rev')) || 0;
+                        if (cloudRev === storedRev) {
+                            cloudRevRef.current = cloudRev;
+                            lastSyncedJsonRef.current = dirty ? null : JSON.stringify(stripForCloud(localWs));
+                            setCloudReady(true);
+                            if (dirty) {
+                                if (pushRef.current) pushRef.current();
+                            } else {
+                                setSyncStatus('saved');
+                            }
+                            return;
+                        }
+
+                        if (!dirty) {
+                            applyCloud(row);
+                        } else {
+                            cloudRevRef.current = cloudRev;
+                            setConflictRow(row);
+                            setSyncStatus('conflict');
+                        }
+                    } catch (err) {
+                        if (cancelled) return;
+                        setSyncStatus('error');
+                        setSyncError(translateSyncError(err));
+                    }
+                })();
+                return () => { cancelled = true; };
+            }, [sb, authUserId]);
+
+            // 3) Tự động lưu lên đám mây sau khi có thay đổi (đợi 1,5 giây cho gọn)
+            useEffect(() => {
+                const json = JSON.stringify(stripForCloud(workspaces));
+                if (!mountedRef.current) {
+                    mountedRef.current = true;
+                    return;
+                }
+                if (json === lastSyncedJsonRef.current) return;
+                lsSet('jff_dirty', '1');
+                if (!sb || !authUserId || !cloudReady) return;
+                setSyncStatus('pending');
+                const timer = setTimeout(() => { if (pushRef.current) pushRef.current(); }, 1500);
+                return () => clearTimeout(timer);
+            }, [workspaces, cloudReady, sb, authUserId]);
+
+            // 4) Khi quay lại tab / có mạng lại: kiểm tra bản mới từ thiết bị khác, đẩy bản chưa lưu
+            useEffect(() => {
+                if (!sb || !authUserId || !cloudReady) return;
+                const onVisible = async () => {
+                    if (document.visibilityState !== 'visible' || pushingRef.current) return;
+                    try {
+                        const { data: row, error } = await sb.from('jff_data').select('data, rev').eq('user_id', authUserId).maybeSingle();
+                        if (error || !row) return;
+                        if (Number(row.rev) > cloudRevRef.current) {
+                            if (lsGet('jff_dirty') === '1') {
+                                setConflictRow(row);
+                                setSyncStatus('conflict');
+                            } else {
+                                applyCloud(row);
+                                showToast('Đã cập nhật dữ liệu mới từ thiết bị khác', 'success');
+                            }
+                        }
+                    } catch (e) { /* bỏ qua */ }
+                };
+                const onOnline = () => {
+                    if (lsGet('jff_dirty') === '1' && pushRef.current) pushRef.current();
+                };
+                document.addEventListener('visibilitychange', onVisible);
+                window.addEventListener('online', onOnline);
+                return () => {
+                    document.removeEventListener('visibilitychange', onVisible);
+                    window.removeEventListener('online', onOnline);
+                };
+            }, [sb, authUserId, cloudReady]);
+
+            const handleAuthSubmit = async (e) => {
+                if (e) e.preventDefault();
+                if (!sb) return;
+                const email = authEmail.trim();
+                if (!email || authPassword.length < 6) {
+                    setAuthMessage({ type: 'warning', text: 'Nhập email và mật khẩu (tối thiểu 6 ký tự).' });
+                    return;
+                }
+                setAuthBusy(true);
+                setAuthMessage(null);
+                try {
+                    if (authMode === 'login') {
+                        const { error } = await sb.auth.signInWithPassword({ email, password: authPassword });
+                        if (error) throw error;
+                        setAuthPassword('');
+                        setShowAccountModal(false);
+                        showToast('Đăng nhập thành công, đang đồng bộ...', 'success');
+                    } else {
+                        const { data, error } = await sb.auth.signUp({ email, password: authPassword });
+                        if (error) throw error;
+                        setAuthPassword('');
+                        if (data && data.session) {
+                            setShowAccountModal(false);
+                            showToast('Đã tạo tài khoản và đăng nhập!', 'success');
+                        } else {
+                            setAuthMessage({ type: 'success', text: 'Đã gửi email xác nhận. Hãy bấm liên kết trong email rồi quay lại đăng nhập.' });
+                            setAuthMode('login');
+                        }
+                    }
+                } catch (err) {
+                    setAuthMessage({ type: 'warning', text: translateAuthError(err && err.message) });
+                } finally {
+                    setAuthBusy(false);
+                }
+            };
+
+            const handleSignOut = async () => {
+                if (!sb) return;
+                setAuthBusy(true);
+                try {
+                    if (cloudReady && lsGet('jff_dirty') === '1') await pushToCloud();
+                    await sb.auth.signOut();
+                    setShowAccountModal(false);
+                    setConflictRow(null);
+                    showToast('Đã đăng xuất. Dữ liệu vẫn còn trên máy này.');
+                } catch (err) {
+                    showToast('Không đăng xuất được: ' + (err && err.message ? err.message : ''), 'warning');
+                } finally {
+                    setAuthBusy(false);
+                }
+            };
+
+            const handlePullNow = async () => {
+                if (!sb || !authUserId) return;
+                if (lsGet('jff_dirty') === '1' && !window.confirm('Máy này có thay đổi chưa lưu lên đám mây. Tải lại sẽ ghi đè các thay đổi đó. Tiếp tục?')) return;
+                setAuthBusy(true);
+                try {
+                    const { data: row, error } = await sb.from('jff_data').select('data, rev').eq('user_id', authUserId).maybeSingle();
+                    if (error) throw error;
+                    if (!row) {
+                        showToast('Đám mây chưa có dữ liệu', 'warning');
+                    } else {
+                        applyCloud(row);
+                        showToast('Đã tải dữ liệu từ đám mây', 'success');
+                    }
+                } catch (err) {
+                    showToast(translateSyncError(err), 'warning');
+                } finally {
+                    setAuthBusy(false);
+                }
+            };
+
+            const handleSaveSbConfig = () => {
+                const url = cfgUrlInput.trim().replace(/\/+$/, '');
+                const key = cfgKeyInput.trim();
+                if (!/^https:\/\/[^\s/]+$/i.test(url)) {
+                    setAuthMessage({ type: 'warning', text: 'Project URL phải có dạng https://xxxx.supabase.co' });
+                    return;
+                }
+                if (isForbiddenKey(key)) {
+                    setAuthMessage({ type: 'warning', text: 'Đây là khóa BÍ MẬT (service_role / secret). Tuyệt đối không dán vào app. Hãy dùng anon public key hoặc publishable key.' });
+                    return;
+                }
+                if (key.length < 20) {
+                    setAuthMessage({ type: 'warning', text: 'Khóa anon/publishable quá ngắn, hãy kiểm tra lại.' });
+                    return;
+                }
+                lsSet('jff_sb_url', url);
+                lsSet('jff_sb_key', key);
+                setSbConfig({ url, key });
+                setAuthMessage({ type: 'success', text: 'Đã lưu cấu hình. Giờ bạn có thể đăng nhập.' });
+            };
+
+            const handleResetSbConfig = async () => {
+                try { if (sb) await sb.auth.signOut(); } catch (e) { /* bỏ qua */ }
+                lsDel('jff_sb_url');
+                lsDel('jff_sb_key');
+                const cfg = getSbConfig();
+                setSbConfig(cfg);
+                setCfgUrlInput(cfg.url);
+                setCfgKeyInput(cfg.key);
+                setAuthMessage(null);
+            };
+
+            const resolveConflictUseCloud = () => {
+                if (conflictRow) applyCloud(conflictRow);
+            };
+
+            const resolveConflictUseLocal = () => {
+                if (!conflictRow) return;
+                cloudRevRef.current = Number(conflictRow.rev) || 1;
+                lastSyncedJsonRef.current = null;
+                lsSet('jff_synced_user', authUserId);
+                lsSet('jff_dirty', '1');
+                setConflictRow(null);
+                setCloudReady(true);
+                setTimeout(() => { if (pushRef.current) pushRef.current(); }, 50);
+            };
+
+            const handleConflictSignOut = async () => {
+                setConflictRow(null);
+                if (sb) {
+                    try { await sb.auth.signOut(); } catch (e) { /* bỏ qua */ }
+                }
+            };
+
+            const syncLabel = !window.supabase ? 'Không tải được thư viện Supabase'
+                : !sb ? 'Chưa kết nối Supabase'
+                : !authUser ? 'Chưa đăng nhập'
+                : ({
+                    off: 'Chưa đồng bộ',
+                    syncing: 'Đang đồng bộ...',
+                    pending: 'Có thay đổi, sắp lưu lên đám mây',
+                    saved: 'Đã lưu lên đám mây',
+                    error: 'Lỗi đồng bộ',
+                    conflict: 'Cần chọn bản dữ liệu'
+                }[syncStatus] || '');
+
+            const cloudIconClass = !sb || !authUser ? 'fa-cloud text-slate-400'
+                : syncStatus === 'syncing' ? 'fa-rotate fa-spin text-cyan-300'
+                : syncStatus === 'pending' ? 'fa-cloud-arrow-up text-amber-300'
+                : syncStatus === 'saved' ? 'fa-cloud text-emerald-400'
+                : 'fa-triangle-exclamation text-amber-400';
             const moveFundOrder = (index, direction) => {
                 saveSnapshotForUndo('Thay đổi thứ tự quỹ');
                 const newFunds = [...funds];
@@ -974,7 +1686,15 @@
                                 </div>
                             </div>
 
-                            <div className="text-right">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowAccountModal(true)}
+                                    className="relative w-9 h-9 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 flex items-center justify-center transition-all active:scale-95"
+                                    title={syncLabel}
+                                >
+                                    <i className={`fa-solid ${cloudIconClass} text-sm`}></i>
+                                </button>
+                                <div className="text-right">
                                 <div className="inline-flex flex-col items-end px-2.5 py-1 rounded-xl bg-slate-900/90 border border-slate-800">
                                     <span className="text-xs font-black text-cyan-400 font-mono tracking-wide">
                                         {getTimeStrInTZ(currentTimezone, nowDate)}
@@ -983,6 +1703,7 @@
                                         {getDateStrInTZ(currentTimezone, nowDate)}
                                     </span>
                                 </div>
+                            </div>
                             </div>
                         </div>
 
@@ -1055,7 +1776,7 @@
                                         <div className="space-y-1.5 pt-1">
                                             <div className="flex justify-between text-[10px] text-slate-400">
                                                 <span>Tỷ lệ phân bổ thực tế</span>
-                                                <span>100%</span>
+                                                <span>{fmtPct(parsedTotalIncome > 0 ? (planMeta.allocated / parsedTotalIncome) * 100 : 0)}%</span>
                                             </div>
                                             <div className="h-2.5 w-full bg-slate-900 rounded-full overflow-hidden flex">
                                                 {calculatedAllocations.map(f => {
@@ -1075,7 +1796,7 @@
                                     )}
 
                                     <div className="flex justify-between items-center pt-2 border-t border-slate-800 text-xs text-slate-400">
-                                        <span>Đang phân bổ cho: <strong className="text-white">{funds.length} quỹ</strong></span>
+                                        <span>Đang phân bổ cho: <strong className="text-white">{planMeta.selectedCount}/{funds.length} quỹ</strong></span>
                                         {Object.keys(overrides).length > 0 && (
                                             <button 
                                                 onClick={() => {
@@ -1093,19 +1814,72 @@
 
                                 {}
                                 <div className="space-y-2.5">
-                                    <div className="flex justify-between items-center text-xs font-semibold text-slate-400 px-1">
-                                        <span>DANH SÁCH QUỸ</span>
-                                        <span className="text-[11px] text-slate-500">Bấm số tiền để chốt | STK để Copy</span>
+                                    <div className="flex justify-between items-center px-1">
+                                        <span className="text-xs font-semibold text-slate-400">DANH SÁCH QUỸ</span>
+                                        <div className="flex items-center gap-3 text-[11px]">
+                                            <button onClick={selectAllFunds} className="text-cyan-400 hover:text-cyan-300 font-semibold">Chọn tất cả</button>
+                                            <button onClick={deselectAllFunds} className="text-slate-400 hover:text-slate-200 font-semibold">Bỏ chọn</button>
+                                        </div>
                                     </div>
+                                    <p className="text-[11px] text-slate-500 px-1 -mt-1">Tích chọn quỹ muốn chia tiền vào · Bấm số tiền để chốt · Bấm STK để copy</p>
+
+                                    {parsedTotalIncome > 0 && (
+                                        <div className="glass-card rounded-xl p-3 text-[11px] space-y-1.5">
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-400">Quỹ tiền cố định đã chọn</span>
+                                                <span className="font-bold text-slate-200">{formatVND(planMeta.vndTotal)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-400">Còn lại chia theo %</span>
+                                                <span className="font-bold text-slate-200">{formatVND(planMeta.remaining)}</span>
+                                            </div>
+                                            {planMeta.adjust === 'raise' && (
+                                                <p className="text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-2 py-1.5">
+                                                    <i className="fa-solid fa-arrow-up-right-dots mr-1"></i>
+                                                    Các quỹ % đã chọn mới chiếm {fmtPct(planMeta.pctSum)}%, nên mỗi quỹ được nâng đều +{fmtPct(planMeta.delta)}% để đủ 100%.
+                                                </p>
+                                            )}
+                                            {planMeta.adjust === 'scale' && (
+                                                <p className="text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1.5">
+                                                    <i className="fa-solid fa-triangle-exclamation mr-1"></i>
+                                                    Tổng % các quỹ đã chọn là {fmtPct(planMeta.pctSum)}% (hơn 100%), đã tự thu nhỏ theo tỷ lệ về 100%.
+                                                </p>
+                                            )}
+                                            {planMeta.noPercentLeft && (
+                                                <p className="text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1.5">
+                                                    <i className="fa-solid fa-circle-exclamation mr-1"></i>
+                                                    Còn {formatVND(planMeta.remaining)} chưa có quỹ nào nhận. Hãy tích chọn thêm quỹ theo %.
+                                                </p>
+                                            )}
+                                            {planMeta.overflow && (
+                                                <p className="text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2 py-1.5">
+                                                    <i className="fa-solid fa-circle-exclamation mr-1"></i>
+                                                    Tổng quỹ tiền cố định đã chọn vượt quá thu nhập nhập vào.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {calculatedAllocations.map((fund, idx) => (
-                                        <div 
+                                        <div
                                             key={fund.id}
-                                            className="glass-card p-3 rounded-xl flex items-center justify-between gap-3 hover:border-slate-600 transition-all group relative overflow-hidden"
+                                            className={`glass-card p-3 rounded-xl flex items-center justify-between gap-2.5 hover:border-slate-600 transition-all group relative overflow-hidden ${fund.selected ? '' : 'opacity-50'}`}
                                             style={{ borderLeft: `4px solid ${fund.color}` }}
                                         >
+                                            <button
+                                                onClick={() => toggleFundSelected(fund.id)}
+                                                role="checkbox"
+                                                aria-checked={fund.selected}
+                                                className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all active:scale-90 ${
+                                                    fund.selected ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-600 text-transparent hover:border-slate-400'
+                                                }`}
+                                                title={fund.selected ? 'Bỏ chọn quỹ này' : 'Chọn quỹ này để chia tiền'}
+                                            >
+                                                <i className="fa-solid fa-check text-[11px]"></i>
+                                            </button>
+
                                             <div className="flex flex-col gap-1 text-slate-500 text-xs">
-                                                <button 
+                                                <button
                                                     onClick={() => moveFundOrder(idx, -1)}
                                                     disabled={idx === 0}
                                                     className="hover:text-cyan-400 disabled:opacity-20 p-0.5"
@@ -1113,7 +1887,7 @@
                                                 >
                                                     <i className="fa-solid fa-chevron-up"></i>
                                                 </button>
-                                                <button 
+                                                <button
                                                     onClick={() => moveFundOrder(idx, 1)}
                                                     disabled={idx === funds.length - 1}
                                                     className="hover:text-cyan-400 disabled:opacity-20 p-0.5"
@@ -1126,11 +1900,15 @@
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-bold text-sm text-slate-100 truncate">{fund.name}</span>
-                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/50">
-                                                        {fund.type === 'vnd' ? `${formatVNDPlain(fund.vndAmount)}đ` : `${fund.percent}%`}
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/50 whitespace-nowrap">
+                                                        {fund.type === 'vnd'
+                                                            ? `${formatVNDPlain(fund.vndAmount)}đ`
+                                                            : (fund.selected && fund.effPercent !== null && Math.abs(fund.effPercent - (Number(fund.percent) || 0)) > 0.05
+                                                                ? `${fund.percent}% → ${fmtPct(fund.effPercent)}%`
+                                                                : `${fund.percent}%`)}
                                                     </span>
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={() => handleCopyBankInfo(fund.bankInfo, fund.name)}
                                                     className="text-xs text-slate-400 hover:text-cyan-300 truncate mt-0.5 flex items-center gap-1.5 text-left group-hover:underline"
                                                     title="Bấm để sao chép thông tin tài khoản"
@@ -1140,30 +1918,36 @@
                                                 </button>
                                             </div>
 
-                                            <div className="text-right cursor-pointer" onClick={() => openFundOverrideModal(fund, fund.finalAmount)}>
-                                                <div className="font-extrabold text-sm text-emerald-400">
-                                                    {formatVND(fund.finalAmount)}
-                                                </div>
-                                                {fund.isOverridden ? (
-                                                    <div className="flex items-center justify-end gap-1 mt-0.5">
-                                                        <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/30">
-                                                            Đã chốt
-                                                        </span>
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                resetFundOverride(fund.id, fund.name);
-                                                            }}
-                                                            className="text-[10px] text-slate-400 hover:text-rose-400 p-0.5"
-                                                            title="Bỏ chốt"
-                                                        >
-                                                            <i className="fa-solid fa-xmark"></i>
-                                                        </button>
+                                            {fund.selected ? (
+                                                <div className="text-right cursor-pointer" onClick={() => openFundOverrideModal(fund, fund.finalAmount)}>
+                                                    <div className="font-extrabold text-sm text-emerald-400">
+                                                        {formatVND(fund.finalAmount)}
                                                     </div>
-                                                ) : (
-                                                    <span className="text-[10px] text-slate-500">Tự động</span>
-                                                )}
-                                            </div>
+                                                    {fund.isOverridden ? (
+                                                        <div className="flex items-center justify-end gap-1 mt-0.5">
+                                                            <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/30">
+                                                                Đã chốt
+                                                            </span>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    resetFundOverride(fund.id, fund.name);
+                                                                }}
+                                                                className="text-[10px] text-slate-400 hover:text-rose-400 p-0.5"
+                                                                title="Bỏ chốt"
+                                                            >
+                                                                <i className="fa-solid fa-xmark"></i>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-500">Tự động</span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="text-right">
+                                                    <span className="text-[11px] font-semibold text-slate-500">Không chia</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -1287,39 +2071,92 @@
                         {}
                         {activeTab === 'history' && (
                             <div className="space-y-4 animate-fadeIn">
-                                <div className="glass-panel p-3.5 rounded-xl space-y-3">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="text-[10px] font-semibold text-slate-300 mb-1 block uppercase">Từ ngày</label>
-                                            <input 
-                                                type="date" 
-                                                value={startDate}
-                                                onChange={(e) => setStartDate(e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
-                                            />
+                                {/* Bộ chọn tháng + tìm kiếm */}
+                                <div className="glass-panel p-3.5 rounded-2xl space-y-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <button
+                                            onClick={() => goMonth(-1)}
+                                            className="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all"
+                                            title="Tháng trước"
+                                        >
+                                            <i className="fa-solid fa-chevron-left"></i>
+                                        </button>
+                                        <div className="text-center min-w-0">
+                                            <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">
+                                                {rangeMode === 'month' ? 'Tra cứu theo tháng' : 'Khoảng thời gian'}
+                                            </p>
+                                            <p className="text-lg font-black text-white leading-tight">
+                                                {rangeMode === 'month'
+                                                    ? `Tháng ${viewMonth.m}/${viewMonth.y}`
+                                                    : `${shortDate(startDate)} → ${shortDate(endDate)}`}
+                                            </p>
                                         </div>
-                                        <div>
-                                            <label className="text-[10px] font-semibold text-slate-300 mb-1 block uppercase">Đến ngày</label>
-                                            <input 
-                                                type="date" 
-                                                value={endDate}
-                                                onChange={(e) => setEndDate(e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
-                                            />
-                                        </div>
+                                        <button
+                                            onClick={() => goMonth(1)}
+                                            className="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all"
+                                            title="Tháng sau"
+                                        >
+                                            <i className="fa-solid fa-chevron-right"></i>
+                                        </button>
                                     </div>
+
+                                    <div className="flex flex-wrap gap-1.5">
+                                        <button
+                                            onClick={goThisMonth}
+                                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold rounded-full flex items-center gap-1.5"
+                                        >
+                                            <i className="fa-solid fa-calendar-day text-cyan-400"></i> Tháng này
+                                        </button>
+                                        <button
+                                            onClick={goLast30Days}
+                                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold rounded-full"
+                                        >
+                                            30 ngày qua
+                                        </button>
+                                        <button
+                                            onClick={() => setRangeMode('custom')}
+                                            className={`px-3 py-1.5 border text-[11px] font-semibold rounded-full flex items-center gap-1.5 ${
+                                                rangeMode === 'custom' ? 'bg-cyan-600 border-cyan-400 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                                            }`}
+                                        >
+                                            <i className="fa-solid fa-sliders"></i> Tùy chọn ngày
+                                        </button>
+                                    </div>
+
+                                    {rangeMode === 'custom' && (
+                                        <div className="grid grid-cols-2 gap-2 animate-fadeIn">
+                                            <div>
+                                                <label className="text-[10px] font-semibold text-slate-300 mb-1 block uppercase">Từ ngày</label>
+                                                <input
+                                                    type="date"
+                                                    value={startDate}
+                                                    onChange={(e) => { setStartDate(e.target.value); setRangeMode('custom'); }}
+                                                    className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-semibold text-slate-300 mb-1 block uppercase">Đến ngày</label>
+                                                <input
+                                                    type="date"
+                                                    value={endDate}
+                                                    onChange={(e) => { setEndDate(e.target.value); setRangeMode('custom'); }}
+                                                    className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="relative flex items-center">
                                         <i className="fa-solid fa-magnifying-glass absolute left-3 text-slate-500 text-xs"></i>
-                                        <input 
+                                        <input
                                             type="text"
-                                            placeholder="Tìm kiếm theo ghi chú hoặc tên quỹ..."
+                                            placeholder="Tìm theo ghi chú hoặc tên quỹ..."
                                             value={historySearch}
                                             onChange={(e) => setHistorySearch(e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs pl-8 pr-3 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs pl-8 pr-8 py-2 rounded-lg focus:outline-none focus:border-cyan-500"
                                         />
                                         {historySearch && (
-                                            <button 
+                                            <button
                                                 onClick={() => setHistorySearch('')}
                                                 className="absolute right-2.5 text-slate-500 hover:text-white text-xs"
                                             >
@@ -1327,126 +2164,181 @@
                                             </button>
                                         )}
                                     </div>
-
-                                    <div className="flex gap-2 pt-1">
-                                        <button 
-                                            onClick={() => {
-                                                setStartDate(getFirstDayOfMonthStrInTZ(currentTimezone));
-                                                setEndDate(getDateStrInTZ(currentTimezone));
-                                                setHistorySearch('');
-                                                showToast('Đã tra cứu theo Tháng Hiện Tại');
-                                            }}
-                                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1"
-                                        >
-                                            <i className="fa-solid fa-calendar-day text-cyan-400"></i> Tháng này
-                                        </button>
-                                        <button 
-                                            onClick={() => showToast(`Tìm thấy ${filteredHistory.length} bản ghi`)}
-                                            className="flex-1 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-lg shadow-md shadow-cyan-600/20 flex items-center justify-center gap-1.5"
-                                        >
-                                            <i className="fa-solid fa-filter"></i> Lọc Kết Quả
-                                        </button>
-                                    </div>
                                 </div>
 
-                                <div className="glass-panel p-4 rounded-xl border border-cyan-500/20 space-y-3">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">THỐNG KÊ TỔNG HỢP TRONG KHOẢNG THỜI GIAN</p>
-                                        <div className="flex items-baseline justify-between mt-1">
-                                            <h3 className="text-xl font-black text-cyan-400">
-                                                {formatVND(historyAggregatedData.grandTotalIncome)}
-                                            </h3>
-                                            <span className="text-xs bg-cyan-950/80 border border-cyan-800/50 text-cyan-300 px-2 py-0.5 rounded-full font-medium">
-                                                {historyAggregatedData.count} lần ghi nhận
-                                            </span>
+                                {/* Tổng quan: biểu đồ tròn + số liệu chính */}
+                                <div className="glass-panel p-4 rounded-2xl border border-cyan-500/20 relative overflow-hidden">
+                                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                                    <div className="flex items-center gap-4 relative">
+                                        <div className="relative w-28 h-28 shrink-0">
+                                            <svg viewBox="0 0 42 42" className="w-full h-full -rotate-90">
+                                                <circle cx="21" cy="21" r="15.9155" fill="none" stroke="rgba(51,65,85,0.6)" strokeWidth="5" />
+                                                {(() => {
+                                                    let acc = 0;
+                                                    return historySummary.rows
+                                                        .filter(r => r.totalAmount > 0)
+                                                        .map(r => {
+                                                            const seg = (
+                                                                <circle
+                                                                    key={r.id}
+                                                                    cx="21"
+                                                                    cy="21"
+                                                                    r="15.9155"
+                                                                    fill="none"
+                                                                    stroke={r.color}
+                                                                    strokeWidth="5"
+                                                                    strokeDasharray={`${r.share} ${100 - r.share}`}
+                                                                    strokeDashoffset={-acc}
+                                                                />
+                                                            );
+                                                            acc += r.share;
+                                                            return seg;
+                                                        });
+                                                })()}
+                                            </svg>
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                                <span className="text-[9px] text-slate-400 uppercase font-semibold">Tổng thu</span>
+                                                <span className="text-sm font-black text-cyan-300 leading-tight">
+                                                    {compactVND(historyAggregatedData.grandTotalIncome)}
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">TỔNG SỐ TIỀN CHI TIẾT CỦA TỪNG QUỸ:</p>
-                                        <div className="grid grid-cols-3 gap-1.5">
-                                            {historyAggregatedData.activeFundList.map(fund => (
-                                                <div 
-                                                    key={fund.id} 
-                                                    className="bg-slate-900/90 p-2 rounded-lg border border-slate-800/80 text-left min-w-0"
-                                                    style={{ borderTop: `2px solid ${fund.color}` }}
-                                                >
-                                                    <p className="text-[10px] text-slate-400 font-semibold truncate" title={fund.name}>
-                                                        {fund.name}
-                                                    </p>
-                                                    <p className="text-[11px] font-extrabold text-white truncate mt-0.5" title={formatVND(fund.totalAmount)}>
-                                                        {formatVND(fund.totalAmount)}
-                                                    </p>
+                                        <div className="flex-1 min-w-0 space-y-2">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng thu trong kỳ</p>
+                                                <p className="text-xl font-black text-cyan-400 truncate">
+                                                    {formatVND(historyAggregatedData.grandTotalIncome)}
+                                                </p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="bg-slate-900/80 rounded-lg px-2.5 py-1.5 border border-slate-800/80">
+                                                    <p className="text-[9px] text-slate-400 uppercase font-semibold">Số lần</p>
+                                                    <p className="text-sm font-extrabold text-white">{historyAggregatedData.count}</p>
                                                 </div>
-                                            ))}
+                                                <div className="bg-slate-900/80 rounded-lg px-2.5 py-1.5 border border-slate-800/80 min-w-0">
+                                                    <p className="text-[9px] text-slate-400 uppercase font-semibold">TB / lần</p>
+                                                    <p className="text-sm font-extrabold text-white truncate">{compactVND(historySummary.avg)}</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <p className="text-xs font-bold text-slate-400 px-1 uppercase">CHI TIẾT CÁC NGÀY GHI NHẬN ({filteredHistory.length})</p>
-                                    
-                                    {filteredHistory.length === 0 ? (
+                                {/* Tiền vào từng quỹ */}
+                                <div className="glass-panel p-4 rounded-2xl space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Tiền vào từng quỹ</p>
+                                        <span className="text-[10px] text-slate-500">{historyAggregatedData.count} lần ghi nhận</span>
+                                    </div>
+
+                                    {historySummary.rows.map(f => (
+                                        <div key={f.id}>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: f.color }}></span>
+                                                    <span className="text-xs font-semibold text-slate-200 truncate">{f.name}</span>
+                                                </div>
+                                                <div className="flex items-baseline gap-2 shrink-0">
+                                                    <span className="text-xs font-extrabold text-white">{formatVND(f.totalAmount)}</span>
+                                                    <span className="text-[10px] text-slate-500 w-11 text-right">{fmtPct(f.share)}%</span>
+                                                </div>
+                                            </div>
+                                            <div className="h-1.5 mt-1.5 rounded-full bg-slate-900 overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-full transition-all"
+                                                    style={{ width: `${f.share}%`, backgroundColor: f.color }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Chi tiết theo ngày */}
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-slate-400 px-1 uppercase">Chi tiết theo ngày ({filteredHistory.length} lần ghi nhận)</p>
+
+                                    {groupedHistory.length === 0 ? (
                                         <div className="text-center py-8 glass-panel rounded-xl text-slate-500 text-xs">
                                             Không có lịch sử phân bổ nào trong khoảng thời gian này.
                                         </div>
                                     ) : (
-                                        filteredHistory.map(rec => {
-                                            const isExpanded = expandedHistoryId === rec.id;
-                                            return (
-                                                <div key={rec.id} className="glass-card rounded-xl overflow-hidden border border-slate-800">
-                                                    <div 
-                                                        onClick={() => setExpandedHistoryId(isExpanded ? null : rec.id)}
-                                                        className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors"
-                                                    >
-                                                        <div className="flex items-center gap-2.5 min-w-0">
-                                                            <button className="text-slate-400 text-xs p-1">
-                                                                <i className={`fa-solid ${isExpanded ? 'fa-chevron-up text-cyan-400' : 'fa-chevron-down'}`}></i>
-                                                            </button>
-                                                            <div className="min-w-0">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="font-bold text-xs text-slate-200">{rec.date}</span>
-                                                                    <span className="text-[10px] text-slate-500">{rec.timestamp.split(' ')[1] || ''}</span>
-                                                                    {rec.note && (
-                                                                        <span className="text-[10px] bg-slate-800 text-cyan-300 px-1.5 py-0.2 rounded border border-slate-700 truncate max-w-[100px]">
-                                                                            {rec.note}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <p className="text-xs font-bold text-emerald-400 mt-0.5">
-                                                                    Tổng thu: {formatVND(rec.totalIncome)}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteHistoryItem(rec.id);
-                                                            }}
-                                                            className="text-slate-500 hover:text-rose-400 p-2 text-xs"
-                                                            title="Xóa bản ghi này"
-                                                        >
-                                                            <i className="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-
-                                                    {isExpanded && (
-                                                        <div className="bg-slate-950/70 p-3 border-t border-slate-800/80 space-y-1.5 animate-fadeIn">
-                                                            {rec.allocations.map((alloc, idx) => (
-                                                                <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-slate-800/40 last:border-0">
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-slate-300 font-medium">{alloc.fundName}</span>
-                                                                        {alloc.bankInfo && <span className="text-[10px] text-slate-500">{alloc.bankInfo}</span>}
-                                                                    </div>
-                                                                    <span className="text-emerald-400 font-bold">{formatVND(alloc.amount)}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
+                                        groupedHistory.map(day => (
+                                            <div key={day.date} className="space-y-1.5">
+                                                <div className="flex items-center justify-between px-1">
+                                                    <span className="text-[11px] font-bold text-slate-300">
+                                                        {weekdayOf(day.date)}, {shortDate(day.date)}
+                                                    </span>
+                                                    <span className="text-[11px] font-bold text-emerald-400">{formatVND(day.total)}</span>
                                                 </div>
-                                            );
-                                        })
+
+                                                {day.records.map(rec => {
+                                                    const isExpanded = expandedHistoryId === rec.id;
+                                                    const recTotal = Number(rec.totalIncome) || 0;
+                                                    return (
+                                                        <div key={rec.id} className="glass-card rounded-xl overflow-hidden border border-slate-800">
+                                                            <div
+                                                                onClick={() => setExpandedHistoryId(isExpanded ? null : rec.id)}
+                                                                className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors"
+                                                            >
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <i className={`fa-solid ${isExpanded ? 'fa-chevron-up text-cyan-400' : 'fa-chevron-down text-slate-400'} text-xs p-1`}></i>
+                                                                    <div className="min-w-0">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-[11px] text-slate-400">{(rec.timestamp || '').split(' ')[1] || ''}</span>
+                                                                            {rec.note && (
+                                                                                <span className="text-[10px] bg-slate-800 text-cyan-300 px-1.5 py-0.5 rounded border border-slate-700 truncate max-w-[130px]">
+                                                                                    {rec.note}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-sm font-extrabold text-emerald-400 mt-0.5">
+                                                                            {formatVND(recTotal)}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteHistoryItem(rec.id);
+                                                                    }}
+                                                                    className="text-slate-500 hover:text-rose-400 p-2 text-xs"
+                                                                    title="Xóa bản ghi này"
+                                                                >
+                                                                    <i className="fa-solid fa-trash"></i>
+                                                                </button>
+                                                            </div>
+
+                                                            {isExpanded && (
+                                                                <div className="bg-slate-950/70 p-3 border-t border-slate-800/80 space-y-2 animate-fadeIn">
+                                                                    {(rec.allocations || []).map((alloc, idx) => {
+                                                                        const share = recTotal > 0 ? Math.min(100, ((Number(alloc.amount) || 0) / recTotal) * 100) : 0;
+                                                                        return (
+                                                                            <div key={idx} className="text-xs">
+                                                                                <div className="flex justify-between items-center gap-2">
+                                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colorForAlloc(alloc) }}></span>
+                                                                                        <div className="min-w-0">
+                                                                                            <span className="text-slate-300 font-medium block truncate">{alloc.fundName}</span>
+                                                                                            {alloc.bankInfo && <span className="text-[10px] text-slate-500 block truncate">{alloc.bankInfo}</span>}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <span className="text-emerald-400 font-bold shrink-0">{formatVND(alloc.amount)}</span>
+                                                                                </div>
+                                                                                <div className="h-1 mt-1 rounded-full bg-slate-900 overflow-hidden">
+                                                                                    <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: colorForAlloc(alloc) }}></div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ))
                                     )}
                                 </div>
                             </div>
@@ -1588,6 +2480,22 @@
 
                                     <div className="space-y-2 pt-2 border-t border-slate-800">
                                         <label className="text-[11px] font-extrabold text-cyan-400 uppercase tracking-wider block">
+                                            <i className="fa-solid fa-cloud mr-1"></i> Tài Khoản & Đồng Bộ
+                                        </label>
+                                        <button
+                                            onClick={() => {
+                                                setIsDrawerOpen(false);
+                                                setShowAccountModal(true);
+                                            }}
+                                            className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 border border-slate-700 shadow-md truncate"
+                                        >
+                                            <i className={`fa-solid ${authUser ? 'fa-user-check' : 'fa-right-to-bracket'}`}></i>
+                                            <span className="truncate">{authUser ? authUser.email : 'Đăng nhập / Kết nối Supabase'}</span>
+                                        </button>
+                                        <p className="text-[10px] text-slate-500">{syncLabel}</p>
+                                    </div>
+                                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                                        <label className="text-[11px] font-extrabold text-cyan-400 uppercase tracking-wider block">
                                             <i className="fa-solid fa-database mr-1"></i> Sao Lưu & Khôi Phục
                                         </label>
                                         <button 
@@ -1603,7 +2511,7 @@
                                 </div>
 
                                 <div className="pt-4 border-t border-slate-800 text-center text-[10px] text-slate-500">
-                                    JFF v6.2 • Auto Save Enabled
+                                    JFF v7.0 • Tự lưu + Đồng bộ Supabase
                                 </div>
                             </div>
                         </div>
@@ -1649,6 +2557,245 @@
                         </div>
                     )}
 
+                    {/* MODAL: Tài khoản & Đồng bộ */}
+                    {showAccountModal && (
+                        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="glass-panel w-full max-w-sm rounded-2xl p-5 border border-cyan-500/30 space-y-4 animate-scaleUp max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                            <i className="fa-solid fa-cloud text-cyan-400"></i> Tài Khoản & Đồng Bộ
+                                        </h3>
+                                        <p className="text-xs text-slate-400">Dữ liệu tự lưu lên Supabase, không cần xuất file</p>
+                                    </div>
+                                    <button
+                                        onClick={() => { setShowAccountModal(false); setAuthMessage(null); }}
+                                        className="text-slate-400 hover:text-white text-lg p-1"
+                                    >
+                                        <i className="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                {authMessage && (
+                                    <div className={`px-3 py-2 rounded-xl text-xs font-medium border ${
+                                        authMessage.type === 'success'
+                                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                            : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                    }`}>
+                                        {authMessage.text}
+                                    </div>
+                                )}
+
+                                {!window.supabase ? (
+                                    <div className="px-3 py-2.5 rounded-xl text-xs bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                        Không tải được thư viện Supabase (có thể đang offline hoặc bị chặn mạng). App vẫn chạy bình thường và lưu trên máy. Hãy tải lại trang khi có mạng.
+                                    </div>
+                                ) : sbKeyForbidden ? (
+                                    <div className="space-y-3">
+                                        <div className="px-3 py-2.5 rounded-xl text-xs bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                            Khóa đang cấu hình là khóa BÍ MẬT (service_role / secret) nên app từ chối dùng. Hãy xóa và nhập anon public key hoặc publishable key.
+                                        </div>
+                                        <button
+                                            onClick={handleResetSbConfig}
+                                            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700"
+                                        >
+                                            Xóa cấu hình và nhập lại
+                                        </button>
+                                    </div>
+                                ) : !sb ? (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-slate-300 leading-relaxed">
+                                            Lấy 2 thông tin này trong Supabase → <strong>Project Settings → API</strong>. Chỉ dùng khóa <strong>anon public</strong> (hoặc publishable). Tuyệt đối không dán khóa service_role / secret.
+                                        </p>
+                                        <div>
+                                            <label className="text-[11px] text-slate-400 block mb-1">Project URL</label>
+                                            <input
+                                                type="url"
+                                                value={cfgUrlInput}
+                                                onChange={(e) => setCfgUrlInput(e.target.value)}
+                                                placeholder="https://xxxx.supabase.co"
+                                                autoCapitalize="off"
+                                                autoCorrect="off"
+                                                className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] text-slate-400 block mb-1">Anon public key</label>
+                                            <input
+                                                type="text"
+                                                value={cfgKeyInput}
+                                                onChange={(e) => setCfgKeyInput(e.target.value)}
+                                                placeholder="eyJ... hoặc sb_publishable_..."
+                                                autoCapitalize="off"
+                                                autoCorrect="off"
+                                                className="w-full bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500 font-mono"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handleSaveSbConfig}
+                                            className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-600/30"
+                                        >
+                                            Lưu cấu hình
+                                        </button>
+                                    </div>
+                                ) : !authUser ? (
+                                    <form onSubmit={handleAuthSubmit} className="space-y-3">
+                                        <div className="flex text-xs border border-slate-700 rounded-xl overflow-hidden">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setAuthMode('login'); setAuthMessage(null); }}
+                                                className={`flex-1 py-2 font-bold ${authMode === 'login' ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-400'}`}
+                                            >
+                                                Đăng nhập
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setAuthMode('signup'); setAuthMessage(null); }}
+                                                className={`flex-1 py-2 font-bold ${authMode === 'signup' ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-400'}`}
+                                            >
+                                                Tạo tài khoản
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] text-slate-400 block mb-1">Email</label>
+                                            <input
+                                                type="email"
+                                                value={authEmail}
+                                                onChange={(e) => setAuthEmail(e.target.value)}
+                                                autoComplete="email"
+                                                placeholder="ban@email.com"
+                                                className="w-full bg-slate-900 border border-slate-700 text-white text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] text-slate-400 block mb-1">Mật khẩu</label>
+                                            <input
+                                                type="password"
+                                                value={authPassword}
+                                                onChange={(e) => setAuthPassword(e.target.value)}
+                                                autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+                                                placeholder="Tối thiểu 6 ký tự"
+                                                className="w-full bg-slate-900 border border-slate-700 text-white text-sm px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={authBusy}
+                                            className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-2"
+                                        >
+                                            {authBusy && <i className="fa-solid fa-spinner fa-spin"></i>}
+                                            {authMode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
+                                        </button>
+                                        <p className="text-[10px] text-slate-500 text-center">
+                                            Chưa đăng nhập vẫn dùng bình thường, dữ liệu lưu trên máy này.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={handleResetSbConfig}
+                                            className="w-full text-[10px] text-slate-500 hover:text-slate-300 underline"
+                                        >
+                                            Đổi cấu hình Supabase
+                                        </button>
+                                    </form>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-1">
+                                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Đang đăng nhập</p>
+                                            <p className="text-sm font-bold text-white truncate">{authUser.email}</p>
+                                            <p className={`text-xs font-semibold flex items-center gap-1.5 ${
+                                                syncStatus === 'saved' ? 'text-emerald-400'
+                                                : syncStatus === 'error' || syncStatus === 'conflict' ? 'text-amber-400'
+                                                : 'text-cyan-300'
+                                            }`}>
+                                                <i className={`fa-solid ${cloudIconClass.split(' ').filter(c => c.indexOf('text-') !== 0).join(' ')}`}></i>
+                                                {syncLabel}
+                                            </p>
+                                            {syncError && <p className="text-[11px] text-amber-300 leading-relaxed">{syncError}</p>}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => { if (pushRef.current) pushRef.current(); }}
+                                                disabled={authBusy || !cloudReady}
+                                                className="py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-cyan-300 text-xs font-semibold rounded-xl border border-slate-700 flex items-center justify-center gap-1.5"
+                                            >
+                                                <i className="fa-solid fa-cloud-arrow-up"></i> Lưu ngay
+                                            </button>
+                                            <button
+                                                onClick={handlePullNow}
+                                                disabled={authBusy}
+                                                className="py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-emerald-300 text-xs font-semibold rounded-xl border border-slate-700 flex items-center justify-center gap-1.5"
+                                            >
+                                                <i className="fa-solid fa-cloud-arrow-down"></i> Tải về
+                                            </button>
+                                        </div>
+                                        <button
+                                            onClick={handleSignOut}
+                                            disabled={authBusy}
+                                            className="w-full py-2.5 bg-rose-500/15 hover:bg-rose-500/25 disabled:opacity-40 text-rose-300 text-xs font-bold rounded-xl border border-rose-500/30 flex items-center justify-center gap-1.5"
+                                        >
+                                            <i className="fa-solid fa-right-from-bracket"></i> Đăng xuất
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL: Xung đột dữ liệu máy / đám mây */}
+                    {conflictRow && (
+                        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="glass-panel w-full max-w-sm rounded-2xl p-5 border border-amber-500/40 space-y-4 animate-scaleUp max-h-[90vh] overflow-y-auto">
+                                <div>
+                                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                        <i className="fa-solid fa-code-compare text-amber-400"></i> Dữ liệu 2 nơi đang khác nhau
+                                    </h3>
+                                    <p className="text-xs text-slate-400 mt-1">Chọn bản muốn giữ. Bản còn lại sẽ bị ghi đè.</p>
+                                </div>
+
+                                {(() => {
+                                    const cloudSum = summarizeWorkspaces(conflictRow.data && conflictRow.data.workspaces);
+                                    const localSum = summarizeWorkspaces(workspaces);
+                                    return (
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 space-y-0.5">
+                                                <p className="font-bold text-emerald-300"><i className="fa-solid fa-cloud mr-1"></i> Đám mây</p>
+                                                <p className="text-slate-300">{cloudSum.workspaces} workspace</p>
+                                                <p className="text-slate-300">{cloudSum.records} lần ghi nhận</p>
+                                                <p className="text-slate-500">Mới nhất: {cloudSum.last || '—'}</p>
+                                            </div>
+                                            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 space-y-0.5">
+                                                <p className="font-bold text-cyan-300"><i className="fa-solid fa-mobile-screen mr-1"></i> Máy này</p>
+                                                <p className="text-slate-300">{localSum.workspaces} workspace</p>
+                                                <p className="text-slate-300">{localSum.records} lần ghi nhận</p>
+                                                <p className="text-slate-500">Mới nhất: {localSum.last || '—'}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={resolveConflictUseCloud}
+                                        className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/30"
+                                    >
+                                        Dùng dữ liệu đám mây
+                                    </button>
+                                    <button
+                                        onClick={resolveConflictUseLocal}
+                                        className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-600/30"
+                                    >
+                                        Dùng dữ liệu máy này (ghi đè đám mây)
+                                    </button>
+                                    <button
+                                        onClick={handleConflictSignOut}
+                                        className="w-full py-2 text-[11px] text-slate-400 hover:text-slate-200 underline"
+                                    >
+                                        Chưa quyết định, đăng xuất
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {/* MODAL: Create New Workspace */}
                     {showNewWsModal && (
                         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
