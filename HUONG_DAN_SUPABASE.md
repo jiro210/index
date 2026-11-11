@@ -44,7 +44,7 @@ Gửi yêu cầu cho Claude kèm tên repo `jiro210/index`. Claude sẽ sửa, �
 ## 3. Cách đổi cấu trúc dữ liệu trên Supabase (hiếm khi cần)
 
 Chỉ cần khi thêm bảng hoặc cột mới.
-1. Vào `supabase.com/dashboard` → project **jiro-portfolio**.
+1. Vào `supabase.com/dashboard` → project **jff-finance**.
 2. Menu trái → **SQL Editor** → **New query**.
 3. Dán đoạn SQL → bấm **Run**.
 4. Kiểm tra ở **Table Editor** xem bảng đã đúng chưa.
@@ -57,28 +57,39 @@ Bảng hiện tại của JFF là `jff_data`. Đoạn SQL tạo nó nằm trong 
 
 ---
 
-## 4. Tài khoản: chỉ mình bạn đăng nhập
+## 4. Tài khoản và đăng nhập Google (JFF tách riêng khỏi portfolio)
 
-### Dùng chung project với portfolio có sao không?
-- Hai app dùng chung **danh sách tài khoản** (Supabase Auth). Tức là một tài khoản đăng nhập được ở cả hai nơi.
-- Nhưng **quyền thì tách riêng**:
-  - Portfolio chỉ cho quản trị khi tài khoản nằm trong bảng `admins`. Một tài khoản không nằm trong `admins` thì dù đăng nhập được cũng **không đọc được `inquiries` và không sửa được `site_settings`**.
-  - JFF chỉ cho mỗi tài khoản đọc và ghi đúng dòng dữ liệu của chính nó trong `jff_data`.
-- Hiện trong project có đúng 1 tài khoản.
+### Hiện trạng
+- **JFF dùng project Supabase riêng: `jff-finance`** (địa chỉ `https://knhgzahoovwgaasmlanw.supabase.co`).
+- **Portfolio vẫn dùng project `jiro-portfolio`.** Hai project có danh sách tài khoản hoàn toàn tách biệt, nên tài khoản tạo bên JFF (kể cả bằng Google) **không tồn tại và không đăng nhập được** bên portfolio.
+- Bảng `jff_data` cũ trong `jiro-portfolio` không còn được app dùng. Sau khi chắc chắn dữ liệu đã sang project mới, có thể xóa bảng này (SQL Editor: `drop table public.jff_data;`). Đừng đụng các bảng `admins`, `site_settings`, `inquiries`.
 
-### Khóa không cho người lạ tạo tài khoản (nên làm)
-Khóa Supabase nằm trong code là khóa công khai, nên nếu Supabase còn cho đăng ký thì về lý thuyết ai cũng gọi được API tạo tài khoản. App đã **gỡ nút "Tạo tài khoản"**, nhưng cần tắt luôn ở phía Supabase:
+### Bật đăng nhập Google (làm một lần, khoảng 10 phút)
 
-1. Supabase → project **jiro-portfolio** → **Authentication**.
-2. Mục **Sign In / Providers** (hoặc **Providers → Email**).
-3. Tắt công tắc **Allow new users to sign up**.
-4. Bấm **Save**.
+**Bước 1: Tạo khóa OAuth ở Google**
+1. Vào `console.cloud.google.com` → chọn hoặc tạo một project (tên bất kỳ).
+2. **APIs & Services → OAuth consent screen** (hoặc **Google Auth Platform → Branding**): chọn **External**, điền tên app (ví dụ JFF) và email của bạn, lưu.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID** → loại **Web application**.
+4. Mục **Authorized redirect URIs** thêm đúng dòng này:
+   `https://knhgzahoovwgaasmlanw.supabase.co/auth/v1/callback`
+5. Bấm **Create**, copy **Client ID** và **Client secret**.
 
-Từ đó chỉ tạo được tài khoản bằng tay: **Authentication → Users → Add user → Create new user** (tick *Auto Confirm User*).
+**Bước 2: Bật Google trong Supabase**
+1. Supabase → project **jff-finance** → **Authentication → Sign In / Providers → Google**.
+2. Bật **Enable Sign in with Google**, dán Client ID và Client secret → **Save**.
 
-Nên bật thêm: **Authentication → Sign In / Providers → Password → Leaked password protection**.
+**Bước 3: Khai báo địa chỉ web**
+1. Supabase → **Authentication → URL Configuration**.
+2. **Site URL**: địa chỉ web JFF trên Vercel, ví dụ `https://index-ten-taupe.vercel.app`.
+3. **Redirect URLs**: thêm cùng địa chỉ đó (nếu có tên miền riêng thì thêm cả tên miền).
+4. Save.
 
----
+**Bước 4: Thử**
+Mở web JFF → bấm Ctrl+F5 → biểu tượng đám mây → **Đăng nhập / Tạo tài khoản với Google** → chọn tài khoản Google. Lần đầu sẽ tự tạo tài khoản, dữ liệu đang có trên máy tự đẩy lên đám mây.
+
+### Ai được vào?
+- Ai có tài khoản Google cũng bấm đăng nhập được, nhưng mỗi người chỉ thấy dữ liệu của chính mình (khóa bằng RLS) và **không liên quan gì tới portfolio**.
+- Nếu muốn chỉ mình bạn dùng: sau khi bạn đã đăng nhập Google xong, vào **Authentication → Sign In / Providers** tắt **Allow new users to sign up**. Từ đó người lạ không tạo thêm tài khoản được.
 
 ## 5. Xử lý lỗi thường gặp
 
@@ -86,7 +97,10 @@ Nên bật thêm: **Authentication → Sign In / Providers → Password → Leak
 |---|---|
 | Sửa xong web vẫn như cũ | Bấm Ctrl+F5; kiểm tra Vercel → Deployments xem bản mới đã READY chưa |
 | Vercel báo ERROR | Bấm vào bản lỗi → xem Build Logs; hoặc rollback như mục 2 |
-| "Sai email hoặc mật khẩu" | Kiểm tra user ở Authentication → Users |
+| "Sai email hoặc mật khẩu" | Kiểm tra user ở Authentication → Users của project **jff-finance** |
+| "Chưa bật đăng nhập Google" | Làm lại Bước 2 mục 4 |
+| Google báo redirect_uri_mismatch | Redirect URI ở Google Cloud phải đúng y như Bước 1.4 |
+| Đăng nhập Google xong quay về trang trắng hoặc sai địa chỉ | Kiểm tra Site URL và Redirect URLs ở Bước 3 |
 | "Chưa có bảng jff_data" | Chạy lại `supabase_setup.sql` trong SQL Editor |
 | Biểu tượng đám mây màu vàng | Bấm vào xem thông báo; mất mạng thì tự thử lại khi có mạng |
 | Máy khác hiện hộp "Dữ liệu 2 nơi khác nhau" | Chọn bản muốn giữ (thường là "Dùng dữ liệu đám mây") |

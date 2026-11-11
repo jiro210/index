@@ -343,14 +343,25 @@
         // ===== Supabase: cấu hình & tiện ích =====
         // Có thể điền sẵn ở đây (chỉ dùng anon/publishable key - KHÔNG dùng service_role / secret key),
         // hoặc để trống rồi nhập trong app: Menu ☰ → Tài Khoản & Đồng Bộ.
-        const SUPABASE_URL_DEFAULT = 'https://oxaahlpurfexwmpzepkz.supabase.co';
-        const SUPABASE_KEY_DEFAULT = 'sb_publishable_4SL4HFl0x52J_5v-up0-TA_rcvKXsnf'; // publishable key: an toàn để public, quyền truy cập do RLS kiểm soát
+        const SUPABASE_URL_DEFAULT = 'https://knhgzahoovwgaasmlanw.supabase.co';
+        const SUPABASE_KEY_DEFAULT = 'sb_publishable_VEPogBmQpV5FLTHxHswhUA_LrqDgyoi'; // publishable key: an toàn để public, quyền truy cập do RLS kiểm soát
 
         const getSbConfig = () => {
             const url = lsGet('jff_sb_url') || SUPABASE_URL_DEFAULT;
             const key = lsGet('jff_sb_key') || SUPABASE_KEY_DEFAULT;
             return { url: (url || '').trim().replace(/\/+$/, ''), key: (key || '').trim() };
         };
+
+        // Đổi project Supabase: xóa dấu vết đồng bộ cũ để dữ liệu trên máy được đẩy lên project mới
+        (() => {
+            const cfg = getSbConfig();
+            if (cfg.url && lsGet('jff_synced_project') !== cfg.url) {
+                lsDel('jff_synced_user');
+                lsDel('jff_cloud_rev');
+                lsSet('jff_dirty', '1');
+                lsSet('jff_synced_project', cfg.url);
+            }
+        })();
 
         // Chặn khóa bí mật bị dán nhầm vào frontend
         const isForbiddenKey = (key) => {
@@ -398,6 +409,7 @@
             if (m.includes('already registered') || m.includes('already been registered')) return 'Email này đã đăng ký. Hãy chuyển sang Đăng nhập.';
             if (m.includes('signups not allowed') || m.includes('signup is disabled') || m.includes('signups are disabled')) return 'Dự án Supabase đang tắt đăng ký. Hãy tạo user trong Supabase → Authentication → Users.';
             if (m.includes('password should be') || m.includes('weak password')) return 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+            if (m.includes('provider is not enabled') || m.includes('unsupported provider')) return 'Chưa bật đăng nhập Google trong Supabase. Làm theo mục Google trong file HUONG_DAN_SUPABASE.md.';
             if (m.includes('rate limit')) return 'Thử quá nhiều lần, vui lòng đợi một lát rồi thử lại.';
             if (m.includes('failed to fetch') || m.includes('network')) return 'Không kết nối được tới Supabase. Kiểm tra mạng hoặc địa chỉ Project URL.';
             return msg || 'Có lỗi xảy ra.';
@@ -1190,7 +1202,7 @@
                 if (!window.supabase || !window.supabase.createClient) return null;
                 try {
                     return window.supabase.createClient(sbConfig.url, sbConfig.key, {
-                        auth: { persistSession: true, autoRefreshToken: true, storageKey: 'jff-supabase-auth' }
+                        auth: { persistSession: true, autoRefreshToken: true, storageKey: 'jff-supabase-auth-v2' }
                     });
                 } catch (e) {
                     return null;
@@ -1495,6 +1507,22 @@
                 } catch (err) {
                     setAuthMessage({ type: 'warning', text: translateAuthError(err && err.message) });
                 } finally {
+                    setAuthBusy(false);
+                }
+            };
+
+            const handleGoogleSignIn = async () => {
+                if (!sb) return;
+                setAuthBusy(true);
+                setAuthMessage(null);
+                try {
+                    const { error } = await sb.auth.signInWithOAuth({
+                        provider: 'google',
+                        options: { redirectTo: window.location.origin + window.location.pathname }
+                    });
+                    if (error) throw error;
+                } catch (err) {
+                    setAuthMessage({ type: 'warning', text: translateAuthError(err && err.message) });
                     setAuthBusy(false);
                 }
             };
@@ -2626,6 +2654,19 @@
                                     </div>
                                 ) : !authUser ? (
                                     <form onSubmit={handleAuthSubmit} className="space-y-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleGoogleSignIn}
+                                            disabled={authBusy}
+                                            className="w-full py-2.5 bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-800 text-xs font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
+                                        >
+                                            <i className="fa-brands fa-google text-sm"></i>
+                                            Đăng nhập / Tạo tài khoản với Google
+                                        </button>
+                                        <div className="relative my-1">
+                                            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
+                                            <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-slate-900 px-2 text-slate-500 font-semibold">hoặc dùng email</span></div>
+                                        </div>
                                                                                 <div>
                                             <label className="text-[11px] text-slate-400 block mb-1">Email</label>
                                             <input
@@ -2657,7 +2698,7 @@
                                             Đăng nhập
                                         </button>
                                         <p className="text-[10px] text-slate-500 text-center">
-                                            Ứng dụng riêng tư, không có đăng ký tài khoản mới. Chưa đăng nhập vẫn dùng bình thường, dữ liệu lưu trên máy này.
+                                            Đăng nhập Google lần đầu sẽ tự tạo tài khoản riêng cho JFF. Chưa đăng nhập vẫn dùng bình thường, dữ liệu lưu trên máy này.
                                         </p>
                                         <button
                                             type="button"
