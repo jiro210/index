@@ -343,8 +343,8 @@
         // ===== Supabase: cấu hình & tiện ích =====
         // Có thể điền sẵn ở đây (chỉ dùng anon/publishable key - KHÔNG dùng service_role / secret key),
         // hoặc để trống rồi nhập trong app: Menu ☰ → Tài Khoản & Đồng Bộ.
-        const SUPABASE_URL_DEFAULT = '';
-        const SUPABASE_KEY_DEFAULT = '';
+        const SUPABASE_URL_DEFAULT = 'https://oxaahlpurfexwmpzepkz.supabase.co';
+        const SUPABASE_KEY_DEFAULT = 'sb_publishable_4SL4HFl0x52J_5v-up0-TA_rcvKXsnf'; // publishable key: an toàn để public, quyền truy cập do RLS kiểm soát
 
         const getSbConfig = () => {
             const url = lsGet('jff_sb_url') || SUPABASE_URL_DEFAULT;
