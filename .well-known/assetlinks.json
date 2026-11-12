@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.jiro.jff",
+    "sha256_cert_fingerprints": ["09:BE:F9:FC:7C:E9:46:EC:0C:B9:30:E0:7B:D5:C4:DE:41:E9:39:F9:96:F2:FB:E7:4A:46:6F:C3:FD:52:45:3E"]
+  }
+}]
