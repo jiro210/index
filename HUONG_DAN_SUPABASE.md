@@ -57,39 +57,22 @@ Bảng hiện tại của JFF là `jff_data`. Đoạn SQL tạo nó nằm trong 
 
 ---
 
-## 4. Tài khoản và đăng nhập Google (JFF tách riêng khỏi portfolio)
+## 4. Tài khoản (JFF tách riêng khỏi portfolio)
 
 ### Hiện trạng
 - **JFF dùng project Supabase riêng: `jff-finance`** (địa chỉ `https://knhgzahoovwgaasmlanw.supabase.co`).
 - **Portfolio vẫn dùng project `jiro-portfolio`.** Hai project có danh sách tài khoản hoàn toàn tách biệt, nên tài khoản tạo bên JFF (kể cả bằng Google) **không tồn tại và không đăng nhập được** bên portfolio.
 - Bảng `jff_data` cũ trong `jiro-portfolio` không còn được app dùng. Sau khi chắc chắn dữ liệu đã sang project mới, có thể xóa bảng này (SQL Editor: `drop table public.jff_data;`). Đừng đụng các bảng `admins`, `site_settings`, `inquiries`.
 
-### Bật đăng nhập Google (làm một lần, khoảng 10 phút)
+### Tạo tài khoản và đăng nhập (không cần dịch vụ ngoài)
+- Trong app: biểu tượng đám mây → tab **Tạo tài khoản** → nhập email, mật khẩu (từ 6 ký tự) → tạo xong thì đăng nhập.
+- Mặc định Supabase bắt **xác nhận email**: app báo "đã gửi email xác nhận", bạn bấm liên kết trong thư rồi quay lại đăng nhập. Email gửi bằng dịch vụ mặc định của Supabase, giới hạn rất ít thư mỗi giờ, nên có thể chậm hoặc vào thư rác.
+- Muốn đăng ký xong dùng được ngay, không cần email: Supabase → project **jff-finance** → **Authentication → Sign In / Providers → Email** → tắt **Confirm email** → Save.
+- Cách khác không cần đăng ký: Authentication → Users → **Add user → Create new user** (tick *Auto Confirm User*).
 
-**Bước 1: Tạo khóa OAuth ở Google**
-1. Vào `console.cloud.google.com` → chọn hoặc tạo một project (tên bất kỳ).
-2. **APIs & Services → OAuth consent screen** (hoặc **Google Auth Platform → Branding**): chọn **External**, điền tên app (ví dụ JFF) và email của bạn, lưu.
-3. **APIs & Services → Credentials → Create credentials → OAuth client ID** → loại **Web application**.
-4. Mục **Authorized redirect URIs** thêm đúng dòng này:
-   `https://knhgzahoovwgaasmlanw.supabase.co/auth/v1/callback`
-5. Bấm **Create**, copy **Client ID** và **Client secret**.
-
-**Bước 2: Bật Google trong Supabase**
-1. Supabase → project **jff-finance** → **Authentication → Sign In / Providers → Google**.
-2. Bật **Enable Sign in with Google**, dán Client ID và Client secret → **Save**.
-
-**Bước 3: Khai báo địa chỉ web**
-1. Supabase → **Authentication → URL Configuration**.
-2. **Site URL**: địa chỉ web JFF trên Vercel, ví dụ `https://index-ten-taupe.vercel.app`.
-3. **Redirect URLs**: thêm cùng địa chỉ đó (nếu có tên miền riêng thì thêm cả tên miền).
-4. Save.
-
-**Bước 4: Thử**
-Mở web JFF → bấm Ctrl+F5 → biểu tượng đám mây → **Đăng nhập / Tạo tài khoản với Google** → chọn tài khoản Google. Lần đầu sẽ tự tạo tài khoản, dữ liệu đang có trên máy tự đẩy lên đám mây.
-
-### Ai được vào?
-- Ai có tài khoản Google cũng bấm đăng nhập được, nhưng mỗi người chỉ thấy dữ liệu của chính mình (khóa bằng RLS) và **không liên quan gì tới portfolio**.
-- Nếu muốn chỉ mình bạn dùng: sau khi bạn đã đăng nhập Google xong, vào **Authentication → Sign In / Providers** tắt **Allow new users to sign up**. Từ đó người lạ không tạo thêm tài khoản được.
+### Chỉ mình bạn dùng?
+- Ai biết địa chỉ web cũng có thể tạo tài khoản, nhưng mỗi người chỉ thấy dữ liệu của chính mình và **không liên quan gì tới portfolio**.
+- Muốn khóa lại: sau khi bạn đã có tài khoản, vào **Authentication → Sign In / Providers** tắt **Allow new users to sign up**. Lúc đó nút Tạo tài khoản trong app sẽ báo lỗi, và bạn chỉ tạo thêm tài khoản bằng tay ở Authentication → Users.
 
 ## 5. Xử lý lỗi thường gặp
 
@@ -98,9 +81,6 @@ Mở web JFF → bấm Ctrl+F5 → biểu tượng đám mây → **Đăng nhậ
 | Sửa xong web vẫn như cũ | Bấm Ctrl+F5; kiểm tra Vercel → Deployments xem bản mới đã READY chưa |
 | Vercel báo ERROR | Bấm vào bản lỗi → xem Build Logs; hoặc rollback như mục 2 |
 | "Sai email hoặc mật khẩu" | Kiểm tra user ở Authentication → Users của project **jff-finance** |
-| "Chưa bật đăng nhập Google" | Làm lại Bước 2 mục 4 |
-| Google báo redirect_uri_mismatch | Redirect URI ở Google Cloud phải đúng y như Bước 1.4 |
-| Đăng nhập Google xong quay về trang trắng hoặc sai địa chỉ | Kiểm tra Site URL và Redirect URLs ở Bước 3 |
 | "Chưa có bảng jff_data" | Chạy lại `supabase_setup.sql` trong SQL Editor |
 | Biểu tượng đám mây màu vàng | Bấm vào xem thông báo; mất mạng thì tự thử lại khi có mạng |
 | Máy khác hiện hộp "Dữ liệu 2 nơi khác nhau" | Chọn bản muốn giữ (thường là "Dùng dữ liệu đám mây") |
