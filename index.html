@@ -1828,22 +1828,72 @@
                         return;
                     }
                     setVersionsError('');
-                    setVersions(data || []);
+                    if (data && data.length > 0) {
+                        setVersions(data);
+                        return;
+                    }
+                    // Chưa có bản nào trong danh sách: hiện bản đang nằm trên đám mây (nếu có)
+                    const { data: cur } = await sb.from('jff_data').select('data, updated_at').eq('user_id', authUserId).maybeSingle();
+                    if (cancelled) return;
+                    if (cur && cur.data && Array.isArray(cur.data.workspaces)) {
+                        setVersions([{
+                            id: 'current',
+                            created_at: cur.updated_at,
+                            kind: 'current',
+                            summary: summarizeWorkspaces(cur.data.workspaces),
+                            __data: cur.data
+                        }]);
+                    } else {
+                        setVersions([]);
+                    }
                 })();
                 return () => { cancelled = true; };
             }, [sb, authUserId, showAccountModal, versionsTick]);
 
+            const getVersionData = async (v) => {
+                if (v.__data) return v.__data;
+                const { data: row, error } = await sb.from('jff_backups').select('data').eq('id', v.id).single();
+                if (error) throw error;
+                return row && row.data;
+            };
+
+            // Lưu 1 bản đám mây thành file .json (cùng định dạng với Xuất Sao lưu, nhập lại được bằng "Chọn file")
+            const handleDownloadVersionFile = async (v) => {
+                if (!sb || !authUserId) return;
+                setAuthBusy(true);
+                try {
+                    const vData = await getVersionData(v);
+                    const cloudWs = vData && Array.isArray(vData.workspaces) ? vData.workspaces : null;
+                    if (!cloudWs || cloudWs.length === 0) throw new Error('Bản lưu rỗng hoặc sai cấu trúc.');
+                    const file = { version: 'v6_all', exportDate: new Date().toISOString(), workspaces: cloudWs, activeWsId: cloudWs[0].id };
+                    const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const stamp = new Date(v.created_at).toLocaleString('sv-SE', { timeZone: currentTimezone }).replace(' ', '_').replace(/:/g, '-');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `JFF_Cloud_${stamp}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast('Đã tải file JSON về máy', 'success');
+                } catch (err) {
+                    showToast('Không tải được file: ' + translateSyncError(err), 'warning');
+                } finally {
+                    setAuthBusy(false);
+                }
+            };
+
             const handleRestoreVersion = async (v) => {
                 if (!sb || !authUserId) return;
                 const when = new Date(v.created_at).toLocaleString('vi-VN');
-                if (!window.confirm(`Khôi phục bản đã lưu lúc ${when}?\n\nDữ liệu hiện tại trên máy sẽ được thay bằng bản này (vẫn có thể bấm Hoàn tác).`)) return;
+                if (!window.confirm(`Tải về bản lưu lúc ${when}?\n\nDữ liệu hiện tại trên máy sẽ được thay bằng bản này (vẫn có thể bấm Hoàn tác).`)) return;
                 setAuthBusy(true);
                 try {
-                    const { data: row, error } = await sb.from('jff_backups').select('data').eq('id', v.id).single();
-                    if (error) throw error;
-                    const cloudWs = row && row.data && Array.isArray(row.data.workspaces) ? row.data.workspaces : null;
+                    const vData = await getVersionData(v);
+                    const cloudWs = vData && Array.isArray(vData.workspaces) ? vData.workspaces : null;
                     if (!cloudWs || cloudWs.length === 0) throw new Error('Bản lưu rỗng hoặc sai cấu trúc.');
-                    saveSnapshotForUndo('Khôi phục bản đã tải lên');
+                    saveSnapshotForUndo('Tải về bản từ đám mây');
                     const localById = {};
                     workspacesRef.current.forEach(w => { localById[w.id] = w; });
                     const merged = cloudWs.map(w => {
@@ -1856,9 +1906,9 @@
                     setWorkspaces(merged);
                     setActiveWsId(prev => (merged.some(w => w.id === prev) ? prev : merged[0].id));
                     setShowAccountModal(false);
-                    showToast(autoSync ? 'Đã khôi phục bản đã chọn, đang lưu lên đám mây' : 'Đã khôi phục bản đã chọn. Bấm "Lưu ngay" nếu muốn ghi lên đám mây', 'success');
+                    showToast(autoSync ? 'Đã tải về bản đã chọn, đang lưu lên đám mây' : 'Đã tải về bản đã chọn. Bấm "Lưu ngay" nếu muốn ghi lên đám mây', 'success');
                 } catch (err) {
-                    showToast('Không khôi phục được: ' + translateSyncError(err), 'warning');
+                    showToast('Không tải về được: ' + translateSyncError(err), 'warning');
                 } finally {
                     setAuthBusy(false);
                 }
@@ -3055,36 +3105,49 @@
 
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
-                                                <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Các bản đã tải lên</p>
-                                                <span className="text-[10px] text-slate-500">tối đa {MAX_CLOUD_VERSIONS} bản</span>
+                                                <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Tải về từ đám mây</p>
+                                                <span className="text-[10px] text-slate-500">các bản đã lưu · tối đa {MAX_CLOUD_VERSIONS}</span>
                                             </div>
+                                            <p className="text-[10px] text-slate-500 leading-relaxed">Chọn một bản rồi bấm <strong className="text-slate-300">Tải về</strong> để nạp vào app, hoặc biểu tượng <i className="fa-solid fa-file-arrow-down"></i> để lưu thành file .json.</p>
                                             {versionsLoading && versions.length === 0 && (
                                                 <p className="text-[11px] text-slate-500 py-2 text-center"><i className="fa-solid fa-spinner fa-spin mr-1"></i>Đang tải danh sách...</p>
                                             )}
                                             {versionsError && <p className="text-[11px] text-amber-300 leading-relaxed">{versionsError}</p>}
                                             {!versionsLoading && !versionsError && versions.length === 0 && (
-                                                <p className="text-[11px] text-slate-500 py-2 text-center bg-slate-900/60 rounded-xl border border-slate-800">Chưa có bản nào. Bấm "Lưu ngay" để tạo bản đầu tiên.</p>
+                                                <p className="text-[11px] text-slate-500 py-2 text-center bg-slate-900/60 rounded-xl border border-slate-800">Chưa có bản nào trên đám mây. Bấm "Lưu ngay" để tạo bản đầu tiên.</p>
                                             )}
                                             {versions.map((v, i) => {
                                                 const sm = v.summary || {};
                                                 return (
-                                                    <div key={v.id} className="flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2">
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs font-bold text-slate-100 truncate">
-                                                                {new Date(v.created_at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                                {i === 0 && <span className="ml-1.5 text-[9px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded px-1 py-0.5">Mới nhất</span>}
-                                                            </p>
-                                                            <p className="text-[10px] text-slate-500 truncate">
-                                                                {v.kind === 'manual' ? 'Lưu thủ công' : 'Tự động lưu'} · {sm.workspaces || 0} workspace · {sm.records || 0} lần ghi nhận
-                                                            </p>
+                                                    <div key={v.id} className="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs font-bold text-slate-100 truncate">
+                                                                    {new Date(v.created_at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: currentTimezone })}
+                                                                    {i === 0 && <span className="ml-1.5 text-[9px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded px-1 py-0.5">Mới nhất</span>}
+                                                                </p>
+                                                                <p className="text-[10px] text-slate-500 truncate">
+                                                                    {v.kind === 'current' ? 'Bản hiện tại trên đám mây' : v.kind === 'manual' ? 'Lưu thủ công' : 'Tự động lưu'} · {sm.workspaces || 0} workspace · {sm.records || 0} lần ghi nhận
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                <button
+                                                                    onClick={() => handleRestoreVersion(v)}
+                                                                    disabled={authBusy}
+                                                                    className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 disabled:opacity-40 text-emerald-300 text-[11px] font-bold rounded-lg border border-emerald-500/30 flex items-center gap-1"
+                                                                >
+                                                                    <i className="fa-solid fa-cloud-arrow-down"></i> Tải về
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDownloadVersionFile(v)}
+                                                                    disabled={authBusy}
+                                                                    title="Lưu bản này thành file .json"
+                                                                    className="w-8 h-8 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 text-xs rounded-lg border border-slate-700 flex items-center justify-center"
+                                                                >
+                                                                    <i className="fa-solid fa-file-arrow-down"></i>
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                        <button
-                                                            onClick={() => handleRestoreVersion(v)}
-                                                            disabled={authBusy}
-                                                            className="shrink-0 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-emerald-300 text-[11px] font-bold rounded-lg border border-slate-700"
-                                                        >
-                                                            Khôi phục
-                                                        </button>
                                                     </div>
                                                 );
                                             })}
