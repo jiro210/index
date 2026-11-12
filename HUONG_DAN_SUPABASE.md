@@ -61,7 +61,7 @@ Bảng hiện tại của JFF là `jff_data`. Đoạn SQL tạo nó nằm trong 
 
 ### Hiện trạng
 - **JFF dùng project Supabase riêng: `jff-finance`** (địa chỉ `https://knhgzahoovwgaasmlanw.supabase.co`).
-- **Portfolio vẫn dùng project `jiro-portfolio`.** Hai project có danh sách tài khoản hoàn toàn tách biệt, nên tài khoản tạo bên JFF (kể cả bằng Google) **không tồn tại và không đăng nhập được** bên portfolio.
+- **Portfolio vẫn dùng project `jiro-portfolio`.** Hai project có danh sách tài khoản hoàn toàn tách biệt, nên tài khoản tạo bên JFF **không tồn tại và không đăng nhập được** bên portfolio.
 - Bảng `jff_data` cũ trong `jiro-portfolio` không còn được app dùng. Sau khi chắc chắn dữ liệu đã sang project mới, có thể xóa bảng này (SQL Editor: `drop table public.jff_data;`). Đừng đụng các bảng `admins`, `site_settings`, `inquiries`.
 
 ### Tạo tài khoản và đăng nhập (không cần dịch vụ ngoài)
