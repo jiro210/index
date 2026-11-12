@@ -340,6 +340,77 @@
             };
         };
 
+        // ===== Giá trị âm (rút quỹ) & khoản cần bù =====
+        // Số tiền âm ở 1 quỹ = quỹ đó bị rút tiền; tháng sau cần bù lại.
+        const sanitizeSignedInput = (raw) => {
+            const str = String(raw === undefined || raw === null ? '' : raw);
+            const neg = /^\s*-/.test(str);
+            const digits = str.replace(/\D/g, '');
+            if (!digits) return neg ? '-' : '0';
+            const f = formatVNDPlain(parseInt(digits, 10));
+            return neg ? '-' + f : f;
+        };
+
+        // Giá trị ròng của 1 lần ghi nhận = thu nhập + các khoản rút (âm)
+        const recordNet = (rec) => {
+            const gross = Number(rec && rec.totalIncome) || 0;
+            const neg = ((rec && rec.allocations) || []).reduce((s, a) => {
+                const v = Number(a.amount) || 0;
+                return v < 0 ? s + v : s;
+            }, 0);
+            return gross + neg;
+        };
+
+        // Khi chưa có thu nhập (chỉ rút quỹ) thì chỉ lưu các quỹ được chốt thủ công
+        const pickRecordAllocations = (list, income) =>
+            list.filter(a => a.selected && (income > 0 || a.isOverridden));
+
+        /**
+         * Khoản cần bù của từng quỹ tại tháng `monthKey` (dạng 'YYYY-MM').
+         * Mỗi tháng: tiền dương vào quỹ trước tiên dùng để trả nợ cũ, sau đó khoản rút (âm) của tháng đó
+         * được cộng vào nợ và bắt đầu phải bù từ tháng sau.
+         */
+        const computeFundDebts = (history, funds, monthKey) => {
+            const byId = {};
+            funds.forEach(f => { byId[f.id] = f; });
+            const byName = {};
+            funds.forEach(f => { byName[(f.name || '').trim().toLowerCase()] = f; });
+
+            const agg = {}; // fundId -> month -> { pos, neg }
+            (history || []).forEach(rec => {
+                const month = (rec.date || '').slice(0, 7);
+                if (!month) return;
+                (rec.allocations || []).forEach(a => {
+                    const fund = byId[a.fundId] || byName[(a.fundName || '').trim().toLowerCase()];
+                    if (!fund) return;
+                    const amt = Number(a.amount) || 0;
+                    if (!agg[fund.id]) agg[fund.id] = {};
+                    if (!agg[fund.id][month]) agg[fund.id][month] = { pos: 0, neg: 0 };
+                    if (amt > 0) agg[fund.id][month].pos += amt;
+                    else agg[fund.id][month].neg += -amt;
+                });
+            });
+
+            const result = {};
+            funds.forEach(f => {
+                const months = agg[f.id] || {};
+                let debt = 0;
+                Object.keys(months).filter(m => m < monthKey).sort().forEach(m => {
+                    const repay = Math.min(debt, months[m].pos);
+                    debt = debt - repay + months[m].neg;
+                });
+                const cur = months[monthKey] || { pos: 0, neg: 0 };
+                const repaid = Math.min(debt, cur.pos);
+                result[f.id] = {
+                    debtStart: debt,
+                    repaid,
+                    remaining: debt - repaid,
+                    withdrawnThisMonth: cur.neg
+                };
+            });
+            return result;
+        };
+
         // ===== Supabase: cấu hình & tiện ích =====
         // Có thể điền sẵn ở đây (chỉ dùng anon/publishable key - KHÔNG dùng service_role / secret key),
         // hoặc để trống rồi nhập trong app: Menu ☰ → Tài Khoản & Đồng Bộ.
@@ -506,10 +577,10 @@
                     setWorkspaces(prevWorkspaces => {
                         return prevWorkspaces.map(ws => {
                             const income = parseVNDInput(ws.draftIncome);
-                            if (income > 0) {
+                            const hasWithdraw = Object.values(ws.draftOverrides || {}).some(v => Number(v) < 0);
+                            if (income > 0 || hasWithdraw) {
                                 const wsFunds = ws.funds || DEFAULT_FUNDS;
-                                const allocations = computeAllocations(wsFunds, income, ws.draftOverrides, ws.draftExcluded).list
-                                    .filter(a => a.selected)
+                                const allocations = pickRecordAllocations(computeAllocations(wsFunds, income, ws.draftOverrides, ws.draftExcluded).list, income)
                                     .map(a => ({
                                         fundId: a.id,
                                         fundName: a.name,
@@ -894,8 +965,8 @@
             };
 
             const handleRecordAllocation = () => {
-                if (parsedTotalIncome <= 0) {
-                    showToast('Vui lòng nhập Tổng Thu Nhập > 0', 'warning');
+                if (parsedTotalIncome <= 0 && !calculatedAllocations.some(a => a.selected && a.isOverridden && a.finalAmount < 0)) {
+                    showToast('Vui lòng nhập Tổng Thu Nhập > 0 (hoặc chốt số âm để ghi nhận rút quỹ)', 'warning');
                     return;
                 }
 
@@ -913,8 +984,8 @@
                     date: dateStr,
                     timestamp: `${dateStr} ${timeStr}`,
                     totalIncome: parsedTotalIncome,
-                    note: incomeNote.trim() || 'Thu nhập',
-                    allocations: calculatedAllocations.filter(a => a.selected).map(a => ({
+                    note: incomeNote.trim() || (parsedTotalIncome > 0 ? 'Thu nhập' : 'Rút quỹ'),
+                    allocations: pickRecordAllocations(calculatedAllocations, parsedTotalIncome).map(a => ({
                         fundId: a.id,
                         fundName: a.name,
                         bankInfo: a.bankInfo,
@@ -1055,6 +1126,7 @@
 
             const historyAggregatedData = useMemo(() => {
                 let grandTotalIncome = 0;
+                let withdrawTotal = 0;
                 
                 const fundTotalsMap = {};
                 funds.forEach(f => {
@@ -1074,6 +1146,7 @@
                     if (Array.isArray(rec.allocations)) {
                         rec.allocations.forEach(alloc => {
                             const allocAmt = Number(alloc.amount) || 0;
+                            if (allocAmt < 0) withdrawTotal += allocAmt;
                             if (fundTotalsMap[alloc.fundId]) {
                                 fundTotalsMap[alloc.fundId].totalAmount += allocAmt;
                             } else {
@@ -1090,7 +1163,7 @@
 
                 const activeFundList = funds.map(f => fundTotalsMap[f.id]);
 
-                if (legacyTotal > 0) {
+                if (legacyTotal !== 0) {
                     activeFundList.push({
                         id: 'legacy_other',
                         name: 'Khác (Quỹ cũ)',
@@ -1102,10 +1175,49 @@
 
                 return {
                     grandTotalIncome,
+                    withdrawTotal,
+                    netTotal: grandTotalIncome + withdrawTotal,
                     count: filteredHistory.length,
                     activeFundList
                 };
             }, [filteredHistory, funds]);
+
+            // ===== Khoản cần bù (quỹ bị rút ở tháng trước) =====
+            const todayMonthKey = getDateStrInTZ(currentTimezone, nowDate).slice(0, 7);
+            const fundDebts = useMemo(
+                () => computeFundDebts(history, funds, todayMonthKey),
+                [history, funds, todayMonthKey]
+            );
+            const debtList = funds
+                .filter(f => fundDebts[f.id] && fundDebts[f.id].debtStart > 0)
+                .map(f => ({ fund: f, ...fundDebts[f.id] }));
+
+            const debtBanner = debtList.length > 0 ? (
+                <div className="glass-card rounded-xl p-3 border border-amber-500/30 bg-amber-500/5 space-y-2">
+                    <p className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                        <i className="fa-solid fa-triangle-exclamation"></i> QUỸ CẦN BÙ LẠI (đã bị rút ở tháng trước)
+                    </p>
+                    {debtList.map(d => (
+                        <div key={d.fund.id} className="text-[11px]">
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: d.fund.color }}></span>
+                                    <span className="font-semibold text-slate-200 truncate">{d.fund.name}</span>
+                                </span>
+                                {d.remaining > 0 ? (
+                                    <span className="font-extrabold text-rose-300 shrink-0">Còn thiếu {formatVND(d.remaining)}</span>
+                                ) : (
+                                    <span className="font-bold text-emerald-400 shrink-0"><i className="fa-solid fa-check mr-1"></i>Đã bù đủ</span>
+                                )}
+                            </div>
+                            <div className="h-1 mt-1 rounded-full bg-slate-900 overflow-hidden">
+                                <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.min(100, (d.repaid / d.debtStart) * 100)}%` }}></div>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5">Cần bù {formatVND(d.debtStart)} · tháng này đã bù {formatVND(d.repaid)}</p>
+                        </div>
+                    ))}
+                </div>
+            ) : null;
 
             // ===== Chọn quỹ để chia tiền =====
             const setExcluded = (val) => {
@@ -1164,12 +1276,12 @@
 
             const historySummary = useMemo(() => {
                 const list = historyAggregatedData.activeFundList;
-                const sumFunds = list.reduce((s, f) => s + f.totalAmount, 0);
+                const sumFunds = list.reduce((s, f) => s + Math.max(0, f.totalAmount), 0);
                 const rows = list
-                    .map(f => ({ ...f, share: sumFunds > 0 ? (f.totalAmount / sumFunds) * 100 : 0 }))
+                    .map(f => ({ ...f, share: sumFunds > 0 && f.totalAmount > 0 ? (f.totalAmount / sumFunds) * 100 : 0 }))
                     .sort((a, b) => b.totalAmount - a.totalAmount);
                 const avg = historyAggregatedData.count > 0
-                    ? Math.round(historyAggregatedData.grandTotalIncome / historyAggregatedData.count)
+                    ? Math.round(historyAggregatedData.netTotal / historyAggregatedData.count)
                     : 0;
                 return { rows, sumFunds, avg };
             }, [historyAggregatedData]);
@@ -1178,7 +1290,7 @@
                 const map = {};
                 filteredHistory.forEach(rec => {
                     if (!map[rec.date]) map[rec.date] = { date: rec.date, total: 0, records: [] };
-                    map[rec.date].total += Number(rec.totalIncome) || 0;
+                    map[rec.date].total += recordNet(rec);
                     map[rec.date].records.push(rec);
                 });
                 return Object.values(map).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -1836,6 +1948,7 @@
                                         </div>
                                     </div>
                                     <p className="text-[11px] text-slate-500 px-1 -mt-1">Tích chọn quỹ muốn chia tiền vào · Bấm số tiền để chốt · Bấm STK để copy</p>
+                                    {debtBanner}
 
                                     {parsedTotalIncome > 0 && (
                                         <div className="glass-card rounded-xl p-3 text-[11px] space-y-1.5">
@@ -1930,11 +2043,21 @@
                                                     <span>{fund.bankInfo || 'Chưa có STK'}</span>
                                                     <i className="fa-regular fa-copy text-[10px] opacity-60"></i>
                                                 </button>
+                                                {fund.selected && fund.finalAmount < 0 && (
+                                                    <div className="text-[10px] mt-1 text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 py-0.5 inline-block">
+                                                        <i className="fa-solid fa-arrow-down mr-1"></i>Rút quỹ · tháng sau cần bù lại
+                                                    </div>
+                                                )}
+                                                {fundDebts[fund.id] && fundDebts[fund.id].debtStart > 0 && (
+                                                    <div className={`text-[10px] mt-1 rounded px-1.5 py-0.5 inline-block border ${fundDebts[fund.id].remaining > 0 ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'}`}>
+                                                        {fundDebts[fund.id].remaining > 0 ? `Cần bù: ${formatVND(fundDebts[fund.id].remaining)}` : 'Đã bù đủ tháng này'}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {fund.selected ? (
                                                 <div className="text-right cursor-pointer" onClick={() => openFundOverrideModal(fund, fund.finalAmount)}>
-                                                    <div className="font-extrabold text-sm text-emerald-400">
+                                                    <div className={`font-extrabold text-sm ${fund.finalAmount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                                                         {formatVND(fund.finalAmount)}
                                                     </div>
                                                     {fund.isOverridden ? (
@@ -2085,6 +2208,8 @@
                         {}
                         {activeTab === 'history' && (
                             <div className="space-y-4 animate-fadeIn">
+                                {debtBanner}
+
                                 {/* Bộ chọn tháng + tìm kiếm */}
                                 <div className="glass-panel p-3.5 rounded-2xl space-y-3">
                                     <div className="flex items-center justify-between gap-2">
@@ -2213,17 +2338,22 @@
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                                                 <span className="text-[9px] text-slate-400 uppercase font-semibold">Tổng thu</span>
                                                 <span className="text-sm font-black text-cyan-300 leading-tight">
-                                                    {compactVND(historyAggregatedData.grandTotalIncome)}
+                                                    {compactVND(historyAggregatedData.netTotal)}
                                                 </span>
                                             </div>
                                         </div>
 
                                         <div className="flex-1 min-w-0 space-y-2">
                                             <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng thu trong kỳ</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng thu ròng trong kỳ</p>
                                                 <p className="text-xl font-black text-cyan-400 truncate">
-                                                    {formatVND(historyAggregatedData.grandTotalIncome)}
+                                                    {formatVND(historyAggregatedData.netTotal)}
                                                 </p>
+                                                {historyAggregatedData.withdrawTotal < 0 && (
+                                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                                        Thu {formatVND(historyAggregatedData.grandTotalIncome)} · <span className="text-rose-400 font-semibold">Rút {formatVND(historyAggregatedData.withdrawTotal)}</span>
+                                                    </p>
+                                                )}
                                             </div>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div className="bg-slate-900/80 rounded-lg px-2.5 py-1.5 border border-slate-800/80">
@@ -2254,7 +2384,7 @@
                                                     <span className="text-xs font-semibold text-slate-200 truncate">{f.name}</span>
                                                 </div>
                                                 <div className="flex items-baseline gap-2 shrink-0">
-                                                    <span className="text-xs font-extrabold text-white">{formatVND(f.totalAmount)}</span>
+                                                    <span className={`text-xs font-extrabold ${f.totalAmount < 0 ? 'text-rose-400' : 'text-white'}`}>{formatVND(f.totalAmount)}</span>
                                                     <span className="text-[10px] text-slate-500 w-11 text-right">{fmtPct(f.share)}%</span>
                                                 </div>
                                             </div>
@@ -2283,12 +2413,13 @@
                                                     <span className="text-[11px] font-bold text-slate-300">
                                                         {weekdayOf(day.date)}, {shortDate(day.date)}
                                                     </span>
-                                                    <span className="text-[11px] font-bold text-emerald-400">{formatVND(day.total)}</span>
+                                                    <span className={`text-[11px] font-bold ${day.total < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{formatVND(day.total)}</span>
                                                 </div>
 
                                                 {day.records.map(rec => {
                                                     const isExpanded = expandedHistoryId === rec.id;
                                                     const recTotal = Number(rec.totalIncome) || 0;
+                                                    const recNet = recordNet(rec);
                                                     return (
                                                         <div key={rec.id} className="glass-card rounded-xl overflow-hidden border border-slate-800">
                                                             <div
@@ -2306,8 +2437,11 @@
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <p className="text-sm font-extrabold text-emerald-400 mt-0.5">
-                                                                            {formatVND(recTotal)}
+                                                                        <p className={`text-sm font-extrabold mt-0.5 ${recNet < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                                            {formatVND(recNet)}
+                                                                            {recNet !== recTotal && (
+                                                                                <span className="ml-1.5 text-[10px] font-semibold text-slate-400">(thu {formatVND(recTotal)}, rút {formatVND(recNet - recTotal)})</span>
+                                                                            )}
                                                                         </p>
                                                                     </div>
                                                                 </div>
@@ -2327,7 +2461,7 @@
                                                             {isExpanded && (
                                                                 <div className="bg-slate-950/70 p-3 border-t border-slate-800/80 space-y-2 animate-fadeIn">
                                                                     {(rec.allocations || []).map((alloc, idx) => {
-                                                                        const share = recTotal > 0 ? Math.min(100, ((Number(alloc.amount) || 0) / recTotal) * 100) : 0;
+                                                                        const share = recTotal > 0 ? Math.max(0, Math.min(100, ((Number(alloc.amount) || 0) / recTotal) * 100)) : 0;
                                                                         return (
                                                                             <div key={idx} className="text-xs">
                                                                                 <div className="flex justify-between items-center gap-2">
@@ -2338,7 +2472,7 @@
                                                                                             {alloc.bankInfo && <span className="text-[10px] text-slate-500 block truncate">{alloc.bankInfo}</span>}
                                                                                         </div>
                                                                                     </div>
-                                                                                    <span className="text-emerald-400 font-bold shrink-0">{formatVND(alloc.amount)}</span>
+                                                                                    <span className={`font-bold shrink-0 ${(Number(alloc.amount) || 0) < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{formatVND(alloc.amount)}</span>
                                                                                 </div>
                                                                                 <div className="h-1 mt-1 rounded-full bg-slate-900 overflow-hidden">
                                                                                     <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: colorForAlloc(alloc) }}></div>
@@ -2545,13 +2679,29 @@
                                     </button>
                                 </div>
                                 <div>
-                                    <label className="text-[11px] text-slate-400 block mb-1">Nhập số tiền muốn chốt cố định (₫)</label>
-                                    <input 
-                                        type="text"
-                                        value={overrideInputValue}
-                                        onChange={(e) => setOverrideInputValue(formatVNDPlain(parseVNDInput(e.target.value)))}
-                                        className="w-full bg-slate-900 border border-slate-700 text-emerald-400 font-extrabold text-lg px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500"
-                                    />
+                                    <label className="text-[11px] text-slate-400 block mb-1">Nhập số tiền muốn chốt cố định (₫). Số âm = rút tiền khỏi quỹ</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            inputMode="text"
+                                            value={overrideInputValue}
+                                            onChange={(e) => setOverrideInputValue(sanitizeSignedInput(e.target.value))}
+                                            className={`flex-1 min-w-0 bg-slate-900 border border-slate-700 font-extrabold text-lg px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500 ${overrideInputValue.indexOf('-') === 0 ? 'text-rose-400' : 'text-emerald-400'}`}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setOverrideInputValue(v => (v.indexOf('-') === 0 ? v.slice(1) : (v === '0' || v === '' ? '-' : '-' + v)))}
+                                            className="px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold active:scale-95"
+                                            title="Đổi dấu âm/dương"
+                                        >
+                                            +/−
+                                        </button>
+                                    </div>
+                                    {overrideInputValue.indexOf('-') === 0 && (
+                                        <p className="text-[11px] text-rose-300 mt-1.5 leading-relaxed">
+                                            <i className="fa-solid fa-circle-info mr-1"></i>Số âm nghĩa là quỹ này bị rút tiền. Tháng sau app sẽ nhắc bạn bù lại.
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex gap-2">
                                     <button 
